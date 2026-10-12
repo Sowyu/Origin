@@ -1,8 +1,8 @@
 {
-  "name": "Zen Browser",
-  "vendor": "Zen OSS Team",
-  "appId": "zen",
-  "binaryName": "zen",
+  "name": "Origin",
+  "vendor": "Origin",
+  "appId": "origin",
+  "binaryName": "origin",
   "version": {
     "product": "firefox",
     "version": "157.0.1",
@@ -16,13 +16,13 @@
   "brands": {
     "release": {
       "backgroundColor": "#282A33",
-      "brandShorterName": "Zen",
-      "brandShortName": "Zen",
-      "brandFullName": "Zen Browser",
+      "brandShorterName": "Origin",
+      "brandShortName": "Origin",
+      "brandFullName": "Origin",
       "release": {
         "displayVersion": "1.23.2b",
         "github": {
-          "repo": "zen-browser/desktop"
+          "repo": "Sowyu/Origin"
         },
         "archives": {
           "windows": "windows.mar",
@@ -33,18 +33,6 @@
           "linux-aarch64": "linux-aarch64.mar"
         }
       }
-    },
-    "twilight": {
-      "backgroundColor": "#282A33",
-      "brandShorterName": "Zen",
-      "brandShortName": "Twilight",
-      "brandFullName": "Zen Twilight",
-      "release": {
-        "displayVersion": "1.24t",
-        "github": {
-          "repo": "zen-browser/desktop"
-        }
-      }
     }
   },
   "license": {
@@ -52,6 +40,5 @@
       ".*\\.json"
     ],
     "licenseType": "MPL-2.0"
-  },
-  "updateHostname": "updates.zen-browser.app"
+  }
 }

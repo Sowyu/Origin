@@ -1,0 +1,40 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# surfer writes zen-browser.app URLs into the generated firefox-branding.js,
+# which loads after zen.js. A locked default keeps its value, so these win.
+
+# First run opened zen-browser.app/welcome and its privacy policy.
+- name: startup.homepage_welcome_url
+  value: ""
+  locked: true
+
+- name: startup.homepage_welcome_url.additional
+  value: ""
+  locked: true
+
+# Opened a zen-browser.app "what's new" page after each version change.
+- name: startup.homepage_override_url
+  value: ""
+  locked: true
+
+- name: app.update.url.manual
+  value: "https://github.com/Sowyu/Origin/releases"
+  locked: true
+
+- name: app.update.url.details
+  value: "https://github.com/Sowyu/Origin/releases"
+  locked: true
+
+- name: app.releaseNotesURL
+  value: "https://github.com/Sowyu/Origin/releases"
+  locked: true
+
+- name: app.releaseNotesURL.aboutDialog
+  value: "https://github.com/Sowyu/Origin/releases"
+  locked: true
+
+- name: app.releaseNotesURL.prompt
+  value: "https://github.com/Sowyu/Origin/releases"
+  locked: true

@@ -1,8 +1,8 @@
 diff --git a/browser/base/content/aboutDialog.css b/browser/base/content/aboutDialog.css
-index 017125bc2510e5f5e317a5e78c40d6aa9ded76ca..d343d8c62a2251e3c3a33ae8f2ab9c4c68218c22 100644
+index 017125bc2510e5f5e317a5e78c40d6aa9ded76ca..b7d116b19706b864b931f2455dce6f5b826f9482 100644
 --- a/browser/base/content/aboutDialog.css
 +++ b/browser/base/content/aboutDialog.css
-@@ -135,6 +135,13 @@
+@@ -135,6 +135,19 @@
    margin: 0 40px;
  }
  
@@ -11,6 +11,12 @@ index 017125bc2510e5f5e317a5e78c40d6aa9ded76ca..d343d8c62a2251e3c3a33ae8f2ab9c4c
 +  text-align: center;
 +  margin-block: 10px;
 +  color: var(--text-color-deemphasized);
++}
++
++/* Origin asks for no donations, so hide Mozilla's "Want to help?" links. */
++#contributeDesc,
++#contributeDescReferrals {
++  display: none;
 +}
 +
  #currentChannel {
