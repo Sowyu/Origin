@@ -1,0 +1,418 @@
+#!/usr/bin/python3
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Memory report for a Gecko build, per process. Opens the browser on a throwaway copy of its
+profile template through Marionette, waits for the tabs and --settle seconds, then has the browser
+save the same gzipped JSON report as about:memory's "Save" button (every process, not anonymized,
+no forced GC), and quits. The report is then split per process (main, GPU, each content process
+by site, utility, socket, RDD) into the explicit total, footprint, resident, heap-unclassified and
+the 15 largest explicit subtrees, found by splitting the largest subtree until 15 rows remain.
+
+Usage: scripts/perf/hold scripts/perf/memreport <browser> [--template T] [--tabs loaded|on-demand] [--settle 150]
+       scripts/perf/memreport --parse memory-report.json.gz   (a report saved by hand from about:memory)
+       scripts/perf/memreport --compare a/memreport.json b/memreport.json [--depth 3] [--rows 20]
+       scripts/perf/memreport --self-test
+Output: ../Zen-Origin-research/perf.noindex/memreport/<browser>/<tabs>/ with memory-report.json.gz,
+memreport.json, memreport.md and procinfo.json (ChromeUtils.requestProcInfo, footprint per pid).
+"""
+import argparse, gzip, json, os, re, shutil, sys, time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import zo
+
+KIND_HEAP, UNITS_BYTES = 1, 0
+TOP = 15
+MB = 1024 * 1024
+# Every prefix this deep or less is kept in memreport.json for --compare.
+PREFIX_DEPTH = 5
+PREFIX_MIN = 64 * 1024
+
+LOADED = "return [...gBrowser.tabs].every(t => !t.hasAttribute('busy') && !t.hasAttribute('pending'));"
+SELECTED = "return !gBrowser.selectedTab.hasAttribute('busy');"
+
+DUMP = """
+const [path] = arguments;
+const dumper = Cc["@mozilla.org/memory-info-dumper;1"].getService(Ci.nsIMemoryInfoDumper);
+await new Promise((resolve, reject) => {
+  try {
+    dumper.dumpMemoryReportsToNamedFile(path, () => resolve(), null, false, false);
+  } catch (e) {
+    reject(e);
+  }
+});
+const procs = await ChromeUtils.requestProcInfo();
+const strip = p => ({ pid: p.pid, type: p.type, origin: p.origin, memory: p.memory });
+return { app: Services.appinfo.name, version: Services.appinfo.version,
+         tabs: gBrowser.tabs.length,
+         pending: [...gBrowser.tabs].filter(t => t.hasAttribute("pending")).length,
+         procinfo: [strip(procs), ...procs.children.map(strip)] };
+"""
+
+UTILITY_KINDS = {"0": "generic", "1": "audio"}  # SandboxingKind on macOS release builds
+
+
+# ---- parsing ----------------------------------------------------------------------------------
+
+def process_label(name):
+    """'webIsolated=http://mdn.localhost:8765 (pid 123)' -> ('content', 'content mdn.localhost', 123)."""
+    m = re.match(r"^(.*?)\s*\(pid (\d+)(?:, sandboxingKind (\d+))?\)$", name)
+    base, pid, sk = (m.group(1), int(m.group(2)), m.group(3)) if m else (name, None, None)
+    if base == "Main Process":
+        return "main", "main", pid
+    if base in ("GPU", "Socket", "RDD"):
+        return base.lower(), base.lower(), pid
+    if base == "Utility":
+        return "utility", "utility " + UTILITY_KINDS.get(sk, f"kind {sk}"), pid
+    kind, _, site = base.partition("=")
+    if site:
+        host = re.sub(r"^[a-z-]+://", "", site).split(":")[0].split("^")[0]
+        return "content", f"content {host}" + ("" if kind == "webIsolated" else f" ({kind})"), pid
+    return "content", f"content {base or 'unknown'}", pid
+
+
+def normalize(path):
+    """Drops per-run identifiers so the same subtree has the same path in every run."""
+    path = re.sub(r"0x[0-9a-fA-F]+", "0x*", path)
+    path = re.sub(r"\bid=\d+", "id=*", path)
+    return re.sub(r"\bpid[= ]\d+", "pid *", path)
+
+
+class Node:
+    __slots__ = ("amount", "kids")
+
+    def __init__(self):
+        self.amount, self.kids = 0, {}
+
+    def add(self, parts, amount):
+        self.amount += amount
+        if parts:
+            self.kids.setdefault(parts[0], Node()).add(parts[1:], amount)
+
+
+def top_paths(root, total, n=TOP):
+    """Splits the largest subtree into its children until n rows remain. The rows never overlap and
+    sum to the explicit total. A split that would overflow folds its smallest children into one
+    '(N others)' row. Subtrees under 1% of explicit stay whole."""
+    rows = [(f"explicit/{k}", v) for k, v in root.kids.items()]
+    while True:
+        rows.sort(key=lambda r: -r[1].amount)
+        pick = next((i for i, (_, v) in enumerate(rows)
+                     if v.kids and v.amount >= total / 100), None)
+        if pick is None:
+            break
+        path, node = rows[pick]
+        kids = sorted(node.kids.items(), key=lambda kv: -kv[1].amount)
+        own = node.amount - sum(k.amount for _, k in kids)
+        room = n - len(rows) + 1
+        if len(kids) == 1 and own == 0:
+            rows[pick] = (f"{path}/{kids[0][0]}", kids[0][1])
+            continue
+        if room < 2:
+            break
+        new = [(f"{path}/{k}", v) for k, v in kids]
+        if own:
+            new.append((f"{path}/(own)", _leaf(own)))
+        if len(new) > room:
+            rest = new[room - 1:]
+            new = new[:room - 1] + [(f"{path}/({len(rest)} others)", _leaf(sum(v.amount for _, v in rest)))]
+        rows[pick:pick + 1] = new
+    rows.sort(key=lambda r: -r[1].amount)
+    return [{"path": p, "bytes": v.amount} for p, v in rows]
+
+
+def _leaf(amount):
+    n = Node()
+    n.amount = amount
+    return n
+
+
+def prefixes(root, depth=PREFIX_DEPTH, minimum=PREFIX_MIN):
+    out = {}
+
+    def walk(node, path, d):
+        if node.amount < minimum and d > 1:
+            return
+        out[path] = node.amount
+        if d < depth:
+            for k, v in node.kids.items():
+                walk(v, f"{path}/{k}", d + 1)
+
+    walk(root, "explicit", 0)
+    return out
+
+
+def summarize(report):
+    """Turns a parsed memory report into per-process numbers, keyed by a name that stays the same
+    across runs ('main', 'gpu', 'content mdn.localhost', 'utility audio')."""
+    procs = {}
+    for r in report["reports"]:
+        if r["units"] != UNITS_BYTES:
+            continue
+        p = procs.setdefault(r["process"], {"tree": Node(), "heap": 0, "other": {}})
+        path, amount = r["path"], r["amount"]
+        if path.startswith("explicit/"):
+            p["tree"].add(normalize(path).split("/")[1:], amount)
+            if r["kind"] == KIND_HEAP:
+                p["heap"] += amount
+        elif "/" not in path:
+            p["other"][path] = p["other"].get(path, 0) + amount
+    out = []
+    for name, p in procs.items():
+        kind, label, pid = process_label(name)
+        tree, other = p["tree"], p["other"]
+        unclassified = None
+        if "heap-allocated" in other and "heap-unclassified" not in tree.kids:
+            unclassified = other["heap-allocated"] - p["heap"]
+            tree.add(["heap-unclassified"], unclassified)
+        elif "heap-unclassified" in tree.kids:
+            unclassified = tree.kids["heap-unclassified"].amount
+        out.append({"process": name, "kind": kind, "label": label, "pid": pid,
+                    "explicit": tree.amount, "heap_unclassified": unclassified,
+                    "footprint": other.get("resident-phys-footprint"), "resident": other.get("resident"),
+                    "resident_unique": other.get("resident-unique"), "heap_allocated": other.get("heap-allocated"),
+                    "top": top_paths(tree, tree.amount) if tree.amount else [],
+                    "prefixes": prefixes(tree)})
+    order = {"main": 0, "gpu": 1, "content": 2, "utility": 3, "socket": 4, "rdd": 5}
+    out.sort(key=lambda s: (order.get(s["kind"], 9), -s["explicit"]))
+    seen = {}
+    for s in out:
+        seen[s["label"]] = seen.get(s["label"], 0) + 1
+        s["key"] = s["label"] if seen[s["label"]] == 1 else f"{s['label']} #{seen[s['label']]}"
+    return out
+
+
+def totals(procs):
+    groups = {}
+    for s in procs:
+        g = "content" if s["kind"] == "content" else ("main+gpu" if s["kind"] in ("main", "gpu") else "helpers")
+        for g2 in (g, "outside content" if g != "content" else None, "all"):
+            if g2:
+                t = groups.setdefault(g2, {"explicit": 0, "footprint": 0, "processes": 0})
+                t["explicit"] += s["explicit"]
+                t["footprint"] += s["footprint"] or 0
+                t["processes"] += 1
+    return groups
+
+
+def load_report(path):
+    opener = gzip.open if path.endswith(".gz") else open
+    with opener(path, "rt", encoding="utf-8") as f:
+        return json.load(f)
+
+
+# ---- output -----------------------------------------------------------------------------------
+
+def mb(b):
+    return "-" if b is None else f"{b / MB:,.1f}"
+
+
+def render(result):
+    procs = result["processes"]
+    lines = [f"# Memory report: {result.get('browser', '?')}", ""]
+    meta = {k: result.get(k) for k in ("app", "version", "tabs_mode", "tabs", "pending", "settle_s", "made", "raw")}
+    lines += [f"- {k}: {v}" for k, v in meta.items() if v is not None]
+    lines += ["", "## Processes (MB)", "", "| process | pid | explicit | footprint | resident | heap-unclassified |",
+              "|---|---:|---:|---:|---:|---:|"]
+    for s in procs:
+        lines.append(f"| {s['key']} | {s['pid'] or ''} | {mb(s['explicit'])} | {mb(s['footprint'])} | "
+                     f"{mb(s['resident'])} | {mb(s['heap_unclassified'])} |")
+    lines += ["", "| group | processes | explicit | footprint |", "|---|---:|---:|---:|"]
+    for g, t in result["totals"].items():
+        lines.append(f"| {g} | {t['processes']} | {mb(t['explicit'])} | {mb(t['footprint'])} |")
+    for s in procs:
+        if s["kind"] == "content" and s["explicit"] < 0.25 * max(p["explicit"] for p in procs):
+            continue  # ponytail: small content processes get no breakdown; use --compare or the JSON for them
+        lines += ["", f"## {s['key']}: top explicit (MB)", "", "| MB | % | path |", "|---:|---:|---|"]
+        for t in s["top"]:
+            pct = 100 * t["bytes"] / s["explicit"] if s["explicit"] else 0
+            lines.append(f"| {mb(t['bytes'])} | {pct:.1f} | `{t['path']}` |")
+    return "\n".join(lines) + "\n"
+
+
+def write_outputs(result, outdir):
+    json.dump(result, open(os.path.join(outdir, "memreport.json"), "w"), indent=1)
+    md = render(result)
+    open(os.path.join(outdir, "memreport.md"), "w").write(md)
+    print(md)
+
+
+def compare(a_path, b_path, depth, rows):
+    a, b = json.load(open(a_path)), json.load(open(b_path))
+    pa = {s["key"]: s for s in a["processes"]}
+    pb = {s["key"]: s for s in b["processes"]}
+    an, bn = a.get("browser", "a"), b.get("browser", "b")
+    out = [f"# {bn} minus {an} (MB, positive means {bn} uses more)", "",
+           "| group | " + an + " explicit | " + bn + " explicit | diff | " + an + " footprint | " + bn + " footprint | diff |",
+           "|---|---:|---:|---:|---:|---:|---:|"]
+    for g in sorted(set(a["totals"]) | set(b["totals"])):
+        ta, tb = a["totals"].get(g, {}), b["totals"].get(g, {})
+        ea, eb, fa, fb = (ta.get("explicit", 0), tb.get("explicit", 0), ta.get("footprint", 0), tb.get("footprint", 0))
+        out.append(f"| {g} | {mb(ea)} | {mb(eb)} | {(eb - ea) / MB:+,.1f} | {mb(fa)} | {mb(fb)} | {(fb - fa) / MB:+,.1f} |")
+    out += ["", "| process | explicit diff | footprint diff | heap-unclassified diff |", "|---|---:|---:|---:|"]
+    keys = [k for k in pa if k in pb] + [k for k in pb if k not in pa] + [k for k in pa if k not in pb]
+    for k in keys:
+        sa, sb = pa.get(k, {}), pb.get(k, {})
+        d = lambda f: ((sb.get(f) or 0) - (sa.get(f) or 0)) / MB
+        note = "" if k in pa and k in pb else (f" (only {bn})" if k in pb else f" (only {an})")
+        out.append(f"| {k}{note} | {d('explicit'):+,.1f} | {d('footprint'):+,.1f} | {d('heap_unclassified'):+,.1f} |")
+    for k in [k for k in pa if k in pb and pa[k]["kind"] in ("main", "gpu")] + \
+             [k for k in pa if k in pb and pa[k]["kind"] not in ("main", "gpu")]:
+        xa, xb = pa[k]["prefixes"], pb[k]["prefixes"]
+        paths = {p for p in set(xa) | set(xb) if p.count("/") == depth - 1}
+        diffs = sorted(((xb.get(p, 0) - xa.get(p, 0), p) for p in paths), key=lambda t: -abs(t[0]))
+        diffs = [t for t in diffs if abs(t[0]) >= PREFIX_MIN][:rows]
+        if not diffs:
+            continue
+        out += ["", f"## {k}: largest differences at depth {depth} (MB)", "",
+                f"| {an} | {bn} | diff | path |", "|---:|---:|---:|---|"]
+        for diff, p in diffs:
+            out.append(f"| {mb(xa.get(p))} | {mb(xb.get(p))} | {diff / MB:+,.2f} | `{p}` |")
+    print("\n".join(out))
+
+
+# ---- running a browser ------------------------------------------------------------------------
+
+def run(a):
+    b = json.load(open(os.path.join(zo.HERE, "browsers.json")))[a.browser]
+    if b["engine"] != "gecko":
+        sys.exit("memreport works only on Gecko browsers")
+    cfg = json.load(open(os.path.join(zo.HERE, "profiles.json")))
+    app = os.path.join(zo.RESEARCH, b["app"])
+    if zo.app_pids(app):
+        sys.exit(f"{app} is already running; quit it first")
+    out = os.path.join(zo.PERF, "memreport", a.browser, a.tabs)
+    prof = os.path.join(out, "profile")
+    raw = os.path.join(out, "memory-report.json.gz")
+    shutil.rmtree(out, ignore_errors=True)
+    os.makedirs(out)
+    zo.clone_tree(os.path.join(zo.TEMPLATES, a.template or b["template"], "base"), prof)
+    prefs = dict(cfg["common"], **cfg[b["ui"]], **cfg["setup"])
+    if a.tabs == "on-demand":
+        prefs.update({"browser.sessionstore.restore_on_demand": True,
+                      "browser.sessionstore.restore_pinned_tabs_on_demand": True})
+    zo.write_prefs(os.path.join(prof, "user.js"), prefs, f"memreport, tabs {a.tabs}")
+    pid, _ = zo.launch(app, args=["-profile", prof, "--marionette", "-remote-allow-system-access"])
+    info = {}
+    try:
+        zo.wait_window(pid)
+        zo.place_window(pid)
+        m = zo.Marionette()
+        end = time.time() + 120
+        while not m.js(LOADED if a.tabs == "loaded" else SELECTED) and time.time() < end:
+            time.sleep(1)
+        zo.log("tabs ready; settling for", a.settle, "s")
+        time.sleep(a.settle)
+        info = m.js(DUMP, raw)
+        zo.log("report saved:", raw)
+        m.quit()
+        zo.wait_exit(pid, 60)
+    finally:
+        zo.quit_app(pid)
+    shutil.rmtree(prof, ignore_errors=True)
+    json.dump(info.get("procinfo"), open(os.path.join(out, "procinfo.json"), "w"), indent=1)
+    meta = {"browser": a.browser, "app": info.get("app"), "version": info.get("version"),
+            "template": a.template or b["template"], "tabs_mode": a.tabs, "tabs": info.get("tabs"),
+            "pending": info.get("pending"), "settle_s": a.settle, "made": time.strftime("%Y-%m-%d %H:%M:%S")}
+    return raw, meta, {p["pid"]: p["memory"] for p in info.get("procinfo") or []}
+
+
+def build(raw, meta, footprints=None):
+    procs = summarize(load_report(raw))
+    for s in procs:
+        if s["footprint"] is None and footprints and s["pid"] in footprints:
+            s["footprint"] = footprints[s["pid"]]  # ProcInfo's phys_footprint, read just after the dump
+    return dict(meta, raw=raw, processes=procs, totals=totals(procs))
+
+
+# ---- self-test --------------------------------------------------------------------------------
+
+def self_test():
+    import tempfile
+    rep = lambda proc, path, amount, kind=1: {"process": proc, "path": path, "kind": kind, "units": 0,
+                                               "amount": amount, "description": ""}
+    main, gpu, web = "Main Process (pid 100)", "GPU (pid 101)", "webIsolated=http://mdn.localhost:8765 (pid 102)"
+    sample = {"version": 1, "hasMozMallocUsableSize": True, "reports": [
+        rep(main, "explicit/js-non-window/zones/zone(0x1a2b)/strings", 30 * MB),
+        rep(main, "explicit/js-non-window/zones/zone(0x3c4d)/strings", 10 * MB),
+        rep(main, "explicit/js-non-window/runtime/gc/marker", 2 * MB),
+        rep(main, "explicit/window-objects/top(chrome://browser/content/browser.xhtml, id=1)/active/layout/frames", 20 * MB),
+        rep(main, "explicit/startup-cache/data", 4 * MB),
+        rep(main, "explicit/images/content/raster/used", 6 * MB, 0),
+        rep(main, "heap-allocated", 100 * MB, 2),
+        rep(main, "resident", 300 * MB, 2),
+        rep(main, "resident-phys-footprint", 250 * MB, 2),
+        rep(main, "js-main-runtime-gc-heap-committed/used/gc-things", 9 * MB, 2),
+        rep(main, "explicit/count-me-not", 5, 2) | {"units": 1},
+        rep(gpu, "explicit/gfx/webrender/resource-cache/textures", 40 * MB, 0),
+        rep(gpu, "explicit/gfx/webrender/gpu-cache", 8 * MB, 0),
+        rep(gpu, "heap-allocated", 30 * MB, 2),
+        rep(web, "explicit/window-objects/top(http://mdn.localhost:8765/, id=7)/active/dom", 3 * MB),
+        rep(web, "resident-phys-footprint", 40 * MB, 2),
+        rep("Utility (pid 103, sandboxingKind 1)", "explicit/heap-unclassified", 2 * MB),
+        rep("Socket (pid 104)", "explicit/network/sockets", MB),
+        rep("prealloc (pid 105)", "explicit/dom", MB),
+        rep("prealloc (pid 106)", "explicit/dom", MB),
+    ]}
+    procs = {s["key"]: s for s in summarize(sample)}
+    assert set(procs) == {"main", "gpu", "content mdn.localhost", "utility audio", "socket",
+                          "content prealloc", "content prealloc #2"}, procs.keys()
+    m = procs["main"]
+    # heap-unclassified = heap-allocated 100 minus heap explicit 30 + 10 + 2 + 20 + 4 = 34 MB
+    assert m["heap_unclassified"] == 34 * MB, m["heap_unclassified"]
+    assert m["explicit"] == (30 + 10 + 2 + 20 + 4 + 6 + 34) * MB, m["explicit"]
+    assert m["footprint"] == 250 * MB and m["resident"] == 300 * MB
+    assert sum(t["bytes"] for t in m["top"]) == m["explicit"], m["top"]
+    assert m["top"][0] == {"path": "explicit/js-non-window/zones/zone(0x*)/strings", "bytes": 40 * MB}, m["top"]
+    assert m["prefixes"]["explicit/js-non-window"] == 42 * MB
+    assert procs["gpu"]["heap_unclassified"] == 30 * MB and procs["gpu"]["footprint"] is None
+    assert procs["content mdn.localhost"]["pid"] == 102
+    t = totals(summarize(sample))
+    assert t["all"]["processes"] == 7 and t["outside content"]["processes"] == 4
+    big = Node()
+    for i in range(40):
+        big.add(["many", f"k{i}"], MB)
+    rows = top_paths(big, big.amount)
+    assert len(rows) <= TOP and sum(r["bytes"] for r in rows) == 40 * MB, rows
+    with tempfile.TemporaryDirectory() as d:
+        raw = os.path.join(d, "memory-report.json.gz")
+        with gzip.open(raw, "wt") as f:
+            json.dump(sample, f)
+        r = build(raw, {"browser": "sample"}, {102: 1})
+        assert r["processes"][0]["key"] == "main"
+        assert render(r).count("top explicit") >= 2
+        with open(os.path.join(d, "a.json"), "w") as f:
+            json.dump(r, f)
+        compare(os.path.join(d, "a.json"), os.path.join(d, "a.json"), 3, 5)
+    print("self-test passed")
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("browser", nargs="?")
+    p.add_argument("--template", help="template folder under perf.noindex/templates (default: the browser's)")
+    p.add_argument("--tabs", choices=["loaded", "on-demand"], default="loaded",
+                   help="loaded: all 10 tabs load at startup (the idle scenario); on-demand: only the selected one")
+    p.add_argument("--settle", type=int, default=150, help="seconds to wait after the tabs load")
+    p.add_argument("--parse", metavar="REPORT", help="summarize a saved memory-report.json.gz, no browser")
+    p.add_argument("--compare", nargs=2, metavar=("A", "B"), help="two memreport.json files")
+    p.add_argument("--depth", type=int, default=3, help="path depth for --compare (explicit/a/b is 3)")
+    p.add_argument("--rows", type=int, default=20, help="rows per process for --compare")
+    p.add_argument("--self-test", action="store_true")
+    a = p.parse_args()
+    if a.self_test:
+        return self_test()
+    if a.compare:
+        return compare(*a.compare, a.depth, a.rows)
+    if a.parse:
+        raw = os.path.abspath(a.parse)
+        meta = {"browser": a.browser or os.path.basename(os.path.dirname(raw)), "made": time.strftime("%Y-%m-%d %H:%M:%S")}
+        return write_outputs(build(raw, meta), os.path.dirname(raw))
+    if not a.browser:
+        p.error("name a browser from browsers.json, or use --parse, --compare or --self-test")
+    raw, meta, footprints = run(a)
+    write_outputs(build(raw, meta, footprints), os.path.dirname(raw))
+
+
+if __name__ == "__main__":
+    main()
