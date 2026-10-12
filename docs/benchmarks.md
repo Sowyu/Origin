@@ -70,6 +70,9 @@ Every scenario runs 3 times per browser, interleaved (run 1 of everything, then 
 - Energy figures come from Apple's energy model (the same one powermetrics and Activity Monitor build on), not from a power rail. They compare browsers on this Mac well; absolute battery hours need the MacBook script planned for milestone 5.
 - The cold launch is cold for the app, not for the disk: macOS keeps the files in its cache and `purge` needs root, which the harness may not use.
 - Frozen pages without scripts make idle numbers lower than on live sites, for every browser alike.
+- Whole-Mac power counts every app on the Mac. The T3 Code service, which runs the agents doing this work, used more energy than WindowServer in some Safari runs (powermetrics coalitions in baseline-1). Comparisons that matter run interleaved with a control, and the browser's own power plus WindowServer's leaves other apps out.
+- The kernel's per-coalition GPU energy field reads near zero or negative for WindowServer, so GPU power comes only from powermetrics for the whole Mac.
+- Safari leans on macOS services outside its own process group. While Safari typed, the spell checker (com.apple.applespell), the Neural Engine daemon (com.apple.aned) for text prediction and com.apple.naturallanguaged used more energy than Safari itself. Firefox and Zen call none of them. Whole-Mac power includes them, which is the right total for a battery but not Safari's own code.
 
 ## Results
 
@@ -90,3 +93,62 @@ Zen 1.23.2b from its tag without changes, Zen's release options without LTO and 
 - Disk: `engine/` 11.2 GB (Firefox source with Zen's patches 6.3 GB, object dir 4.9 GB), `~/.mozbuild` 3.3 GB, Rust 1.0 GB, cached tarball 0.8 GB, `node_modules` 0.1 GB: about 16.4 GB. Free space went from 134 GB to 116 GB.
 - Output: a 125 MB DMG holding a 385 MB arm64 app (the official universal app is 578 MB).
 - Spotlight began indexing the 400,000 files of `engine/` after the build and kept the load average near 15. A `.metadata_never_index` file did not stop it; `engine/` is now a symlink to `engine.noindex/`, which Spotlight skips.
+
+
+### Baseline, 2026-10-12 to 13
+
+Batch baseline-1: official Zen 1.23.2b, stock Zen 1.23.2b built here, Firefox 157.0.1 and Safari 27.0.1 on every scenario, 3 runs each, plus 3 runs of the no-browser floor (machine 108 mW, WindowServer 8 mW). 135 runs, none failed. Full tables per metric: `docs/perf/2026-10-13-baseline.md`.
+
+#### Whole-Mac power (mW)
+
+| scenario | zen-official | zen-stock | firefox | safari | zen-official vs firefox |
+|---|---|---|---|---|---|
+| launch | 1131 ms / 16.8 J | 1311 ms / 19.7 J | 1142 ms / 18.1 J | 948 ms / 12.6 J | within noise |
+| idle | 107 | 104 | 109 | 131 | within noise |
+| minimized | 115 | 106 | 109 | 154 | within noise |
+| switch tabs | 365 | 351 | 207 | 460 | +76% |
+| switch spaces | 379 | 382 | n/a | n/a | n/a |
+| sidebar | 206 | 224 | 214 | 964 | within noise |
+| split | 1489 | 1994 | 2145 | n/a | -31% |
+| scroll | 349 | 357 | 236 | 526 | +48% |
+| video-windowed | 264 | 260 | 174 | 370 | +52% |
+| video-fullscreen | 114 | 117 | 110 | 251 | within noise |
+| typing | 149 | 160 | 167 | 828 | within noise |
+| bgtimer | 102 | 111 | 106 | 133 | within noise |
+
+Batches: baseline-1. Runs per scenario: zen-official 3, zen-stock 3, firefox 3, safari 3. Medians; change is first paint for launch, and "within noise" when the min to max ranges overlap.
+
+#### Browser power plus WindowServer (mW)
+
+| scenario | zen-official | zen-stock | firefox | safari | zen-official vs firefox |
+|---|---|---|---|---|---|
+| launch | 1131 ms / 16.8 J | 1311 ms / 19.7 J | 1142 ms / 18.1 J | 948 ms / 12.6 J | within noise |
+| idle | 9 | 9 | 8 | 12 | +14% |
+| minimized | 9 | 9 | 9 | 9 | within noise |
+| switch tabs | 147 | 173 | 112 | 301 | +31% |
+| switch spaces | 106 | 113 | n/a | n/a | n/a |
+| sidebar | 46 | 51 | 48 | 701 | within noise |
+| split | 1169 | 1733 | 2086 | n/a | -44% |
+| scroll | 78 | 79 | 54 | 305 | +45% |
+| video-windowed | 48 | 48 | 29 | 66 | +67% |
+| video-fullscreen | 7 | 7 | 7 | 11 | within noise |
+| typing | 24 | 25 | 46 | 137 | -47% |
+| bgtimer | 10 | 11 | 10 | 13 | within noise |
+
+Batches: baseline-1. Runs per scenario: zen-official 3, zen-stock 3, firefox 3, safari 3. Medians; change is first paint for launch, and "within noise" when the min to max ranges overlap.
+
+#### Memory at idle (MB)
+
+| scenario | zen-official | zen-stock | firefox | safari | zen-official vs firefox |
+|---|---|---|---|---|---|
+| idle | 1159 | 1201 | 1165 | 490 | within noise |
+
+Batches: baseline-1. Runs per scenario: zen-official 3, zen-stock 3, firefox 3, safari 3. Medians; change is first paint for launch, and "within noise" when the min to max ranges overlap.
+
+What the baseline shows:
+
+- With nothing moving, every Gecko browser sits at the no-browser floor: idle, minimized, the background timer and fullscreen video.
+- When content moves, official Zen costs the Mac 90 to 160 mW more than Firefox (scroll +48%, windowed video +52%, tab switching +76%). The browsers' own CPU energy is close; the extra is WindowServer's GPU work, 33.5 against 21.6 ms of GPU time per second while scrolling.
+- Zen beats Firefox at dragging the split-view divider and at typing.
+- Stock Zen without LTO and PGO is slower than official Zen: first paint 1,311 against 1,131 ms, and 1,579 against 1,013 mW of app power for the split drag.
+- Safari wins launch (948 ms, 12.6 J) and memory (490 MB against about 1,160), and loses most scenarios where something moves. While scrolling, Safari's own processes used 258 mW of CPU against Firefox's 26 mW (scroll r1); why is unverified, and its Liquid Glass toolbar over the page is the first suspect. Its typing wakes the macOS text services listed under known limits.
