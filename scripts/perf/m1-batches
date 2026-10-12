@@ -9,7 +9,7 @@
 # 2. origin-1: Origin on every scenario. Where something moves, stock Zen runs interleaved as a
 #    control, and so does Origin with every Zen effect off (min-visual), so the comparison is safe
 #    from drift and from other apps on the Mac (T3 Code's service shows up in whole-Mac power).
-#    The no-browser floor runs again for drift in the scenarios where nothing moves.
+#    Stock Zen runs interleaved in the other scenarios too, and the no-browser floor again.
 # 3. memory-1: idle with only the selected tab loaded (on-demand), with and without spare
 #    processes (lean-memory; Origin has those prefs built in), and Origin's tab unloader set to
 #    one minute (unload-1min).
@@ -27,13 +27,16 @@ set -u
 here="$(cd "$(dirname "$0")" && pwd)"
 BROWSERS="${BROWSERS:-zen-official,zen-stock,firefox}"
 SETTLE="${SETTLE:-150}"
+# ponytail: agents share this Mac, so the quiet wait allows a load of 8; every comparison runs
+# interleaved with a control, raise MAXLOAD back to 3.5 when the Mac is quiet.
+MAXLOAD="${MAXLOAD:-8}"
 ACTIVE="switch,scroll,video-windowed,sidebar,split"
-run() { "$here/run" --settle "$SETTLE" "$@" || echo "step failed: $*"; }
+run() { "$here/run" --settle "$SETTLE" --max-load "$MAXLOAD" "$@" || echo "step failed: $*"; }
 
 run --batch baseline-1 --browsers "none,$BROWSERS,safari" --scenarios all --runs 3
 
 run --batch origin-1 --browsers zen-stock,origin,origin+min-visual --scenarios "$ACTIVE" --runs 3
-run --batch origin-1 --browsers none,origin --scenarios all --runs 3
+run --batch origin-1 --browsers none,zen-stock,origin --scenarios all --runs 3
 run --batch origin-1 --browsers origin,origin+quiet-newtab --scenarios launch,idle --runs 3
 
 run --batch memory-1 --browsers firefox+on-demand,firefox+lean-memory,zen-stock+on-demand,zen-stock+lean-memory,origin+on-demand,origin+unload-1min --scenarios idle --runs 3

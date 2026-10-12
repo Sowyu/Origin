@@ -53,3 +53,34 @@ add_task(async function test_unload_idle_background_tabs() {
     await BrowserTestUtils.removeTab(tab);
   }
 });
+
+add_task(async function test_trim_once_per_idle_period() {
+  await SpecialPowers.pushPrefEnv({
+    set: [
+      ["origin.tabs.unload-after-minutes", 0],
+      ["origin.memory.trim-after-idle-minutes", 1],
+    ],
+  });
+
+  let trims = 0;
+  const observer = (subject, topic, data) => {
+    if (data == "heap-minimize") {
+      trims++;
+    }
+  };
+  Services.obs.addObserver(observer, "memory-pressure");
+  // Pretend the user has not touched anything for five minutes.
+  const { _userIdleMs, _trimmedAt } = OriginTabUnloader;
+  OriginTabUnloader._userIdleMs = () => 5 * 60 * 1000;
+  OriginTabUnloader._trimmedAt = 0;
+
+  await OriginTabUnloader._tick();
+  is(trims, 1, "The first idle tick sends one heap-minimize");
+  await OriginTabUnloader._tick();
+  is(trims, 1, "A second tick in the same idle period sends none");
+
+  OriginTabUnloader._userIdleMs = _userIdleMs;
+  OriginTabUnloader._trimmedAt = _trimmedAt;
+  Services.obs.removeObserver(observer, "memory-pressure");
+  await SpecialPowers.popPrefEnv();
+});

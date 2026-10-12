@@ -80,6 +80,11 @@
     "prefs": {"origin.tabs.unload-after-minutes": 1},
     "scenarios": []
   },
+  "idle-trim-1min": {
+    "what": "Origin's idle cache trim at 1 minute: one memory-pressure notification after a minute without input, so the idle scenario measures memory after WebRender drops its caches",
+    "prefs": {"origin.memory.trim-after-idle-minutes": 1},
+    "scenarios": []
+  },
   "quiet-newtab": {
     "what": "Firefox's new tab machinery kept as quiet as prefs allow: blank homepage and new tab page, the 12 low-risk widget feeds and the wallpaper fetch off (docs/research/newtab-2026-10-13.md)",
     "prefs": {"browser.startup.homepage": "about:blank",

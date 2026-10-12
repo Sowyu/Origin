@@ -10,3 +10,10 @@
 # Essentials and pinned tabs stay loaded so mail and chat keep their notifications.
 - name: origin.tabs.unload-essentials
   value: false
+
+# On the same minute tick, after this many minutes without user input, send one
+# memory-pressure notification so WebRender and the content processes drop their
+# caches. Skipped while a tab plays media or shares camera, microphone or screen.
+# 0 turns it off. Off until the harness measures it (variant idle-trim-1min).
+- name: origin.memory.trim-after-idle-minutes
+  value: 0

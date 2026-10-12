@@ -1,0 +1,423 @@
+#!/usr/bin/python3
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Visual check of the UI the cuts in docs/cuts.md touched. Opens the browser on a throwaway copy
+of a profile template through Marionette and walks through the restored window, a space switch,
+compact mode, split view, a folder, the theme and emoji pickers, the site data panel, the tab and
+space context menus, the command palette, the keyboard shortcuts page, every settings pane and the
+About dialog. Each step takes one or more screenshots and collects the console errors logged while
+it ran (nsIScriptError without the warning flag). After each step a reset closes popups and puts
+compact mode, the space, split view and folders back, so one failed step leaves the rest running.
+
+The template's tabs point at the fixture server; start it first (scripts/detach serve scripts/perf/serve)
+or the site data panel shows an error page's data.
+
+Usage: scripts/perf/hold scripts/perf/uicheck <browser> [--template zen-1.23.2b] [--wait 10]
+Output: ../Zen-Origin-research/perf.noindex/uicheck/<browser>/ with one PNG per screenshot,
+uicheck.json and index.html, a contact sheet with problems that are new since the last run first.
+Exits 1 when a step fails or logs an error.
+"""
+import argparse, html, json, os, shutil, sys, time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import zo
+
+LOADED = "return [...gBrowser.tabs].every(t => !t.hasAttribute('busy') && !t.hasAttribute('pending'));"
+
+# Prepended to every step script. Pointer events go through windowUtils.sendMouseEvent, the call
+# EventUtils.synthesizeMouseAtCenter makes in Zen's own tests (src/zen/tests/tabs/head.js).
+HELPERS = r"""
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const timeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) =>
+  setTimeout(() => rej(new Error(`timed out after ${ms} ms: ${what}`)), ms))]);
+const until = async (fn, ms, what) => {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    try { const v = await fn(); if (v) return v; } catch (e) {}
+    await sleep(100);
+  }
+  throw new Error(`timed out after ${ms} ms waiting for ${what}`);
+};
+const byId = id => {
+  const el = document.getElementById(id);
+  if (!el) throw new Error(`no #${id} in the window`);
+  return el;
+};
+const onPopup = (el, type, ms = 5000) => timeout(new Promise(res => {
+  const h = e => { if (e.target === el) { el.removeEventListener(type, h); res(); } };
+  el.addEventListener(type, h);
+}), ms, `${type} on #${el.id}`);
+const contextClick = el => {
+  const r = el.getBoundingClientRect();
+  if (!r.width || !r.height) throw new Error(`${el.localName}.${el.className} has no size`);
+  window.windowUtils.sendMouseEvent("contextmenu", r.left + r.width / 2, r.top + r.height / 2, 2, 1, 0);
+};
+const webTabs = () => gBrowser.visibleTabs.filter(t => !t.pinned && !t.group &&
+  !t.hasAttribute("zen-empty-tab") && !t.hasAttribute("zen-essential") &&
+  /^https?:/.test(t.linkedBrowser?.currentURI?.spec));
+const selectWebTab = async () => {
+  const t = webTabs()[0];
+  if (!t) throw new Error("no web page tab in this space");
+  if (gBrowser.selectedTab !== t) { gBrowser.selectedTab = t; await sleep(300); }
+  return t;
+};
+const setCompact = async on => {
+  if (gZenCompactModeManager.preference === on) return;
+  const done = timeout(new Promise(r => window.addEventListener("ZenCompactMode:Toggled", r, { once: true })),
+                       5000, "ZenCompactMode:Toggled");
+  gZenCompactModeManager.toggle();  // what cmd_zenCompactModeToggle runs (zen-sets.js)
+  await done;
+};
+const setFolderCollapsed = async (f, collapsed) => {
+  if (f.collapsed === collapsed) return;
+  const done = timeout(new Promise(r => f.addEventListener("ZenFolderAnimationFinished", r, { once: true })),
+                       5000, "ZenFolderAnimationFinished");
+  f.collapsed = collapsed;  // what a click on the folder header does
+  await done;
+};
+const openPrefs = async pane => {
+  openPreferences(pane);
+  const browser = await until(() => {
+    const b = gBrowser.selectedBrowser;
+    return b.currentURI.spec.startsWith("about:preferences") &&
+      b.contentDocument?.readyState == "complete" && b.contentWindow?.gotoPref && b;
+  }, 15000, "about:preferences to load");
+  const win = browser.contentWindow, doc = browser.contentDocument;
+  await win.gotoPref(pane);
+  const shown = await until(() => [...doc.querySelectorAll(`[data-category="${pane}"]`)].filter(e => !e.hidden).length,
+                            5000, `${pane} to show`);
+  return { win, doc, shown };
+};
+"""
+
+# Runs once: listens for console errors and saves the state the reset puts back.
+INSTALL = """
+const isError = m => m instanceof Ci.nsIScriptError && !(m.flags & Ci.nsIScriptError.warningFlag);
+const fmt = m => `${m.errorMessage} (${m.sourceName}:${m.lineNumber})`;
+const s = window.__uicheck = { errors: [], compact: window.gZenCompactModeManager?.preference,
+  space: window.gZenWorkspaces?.activeWorkspace, tab: gBrowser.selectedTab,
+  split: window.gZenViewSplitter?.currentView ?? -1, folder: null, folderTabs: [] };
+s.listener = { observe(m) { if (isError(m)) s.errors.push(fmt(m)); } };
+Services.console.registerListener(s.listener);
+return Services.console.getMessageArray().filter(isError).map(fmt);
+"""
+
+TAKE_ERRORS = "const s = window.__uicheck; const e = s.errors; s.errors = []; return e;"
+
+RESET = HELPERS + """
+const s = window.__uicheck, done = [];
+for (const w of Services.wm.getEnumerator("Browser:About")) { w.close(); done.push("about dialog"); }
+for (const p of document.querySelectorAll("panel, menupopup")) {
+  if (p.state == "open" || p.state == "showing") { p.hidePopup(); done.push("#" + p.id); }
+}
+if (gURLBar.view.isOpen) { gURLBar.view.close(); done.push("urlbar view"); }
+gURLBar.handleRevert();
+gNavToolbox.removeAttribute("zen-has-implicit-hover");
+for (const t of [...gBrowser.tabs]) {
+  if (t.linkedBrowser?.currentURI?.spec.startsWith("about:preferences")) { gBrowser.removeTab(t); done.push("settings tab"); }
+}
+if (s.folder) {
+  const f = s.folder, tabs = s.folderTabs;
+  s.folder = null; s.folderTabs = [];
+  if (f.isConnected) await f.unpackTabs();
+  for (const t of tabs) if (t.isConnected && t.pinned) gBrowser.unpinTab(t);
+  done.push("folder");
+}
+if (window.gZenViewSplitter && s.split < 0 && gZenViewSplitter.currentView >= 0) {
+  gZenViewSplitter.unsplitCurrentView(); done.push("split view");
+}
+if (window.gZenCompactModeManager && gZenCompactModeManager.preference !== s.compact) {
+  await setCompact(s.compact); done.push("compact mode");
+}
+if (window.gZenWorkspaces && s.space && gZenWorkspaces.activeWorkspace !== s.space) {
+  await gZenWorkspaces.changeWorkspace(gZenWorkspaces.getWorkspaces().find(w => w.uuid == s.space));
+  done.push("space");
+}
+if (s.tab?.isConnected && gBrowser.selectedTab !== s.tab && !s.tab.hidden) gBrowser.selectedTab = s.tab;
+gBrowser.selectedBrowser.focus();
+await sleep(500);
+return done;
+"""
+
+# Each step: (name, needs Zen, [(shot, script, args)]). A script returns info for uicheck.json;
+# an info "rect" [x, y, w, h] in screen points captures that rectangle instead of the main window.
+STEPS = [
+    ("restored", False, [("window", """
+return { title: document.title, tabs: gBrowser.visibleTabs.length,
+         space: window.gZenWorkspaces?.getActiveWorkspace()?.name };""", ())]),
+
+    ("second-space", True, [("switched", """
+await gZenWorkspaces.promiseInitialized;
+const other = gZenWorkspaces.getWorkspaces().find(w => w.uuid !== gZenWorkspaces.activeWorkspace);
+if (!other) throw new Error("the profile has one space");
+await gZenWorkspaces.changeWorkspace(other);
+await sleep(700);
+return { space: gZenWorkspaces.getActiveWorkspace()?.name, tabs: gBrowser.visibleTabs.length };""", ())]),
+
+    ("compact-mode", True, [
+        ("on", "await setCompact(true); await sleep(500); return { compact: gZenCompactModeManager.preference };", ()),
+        ("off", "await setCompact(false); await sleep(500); return { compact: gZenCompactModeManager.preference };", ())]),
+
+    ("split-view", True, [
+        ("split", """
+const tabs = webTabs().slice(0, 2);
+if (tabs.length < 2) throw new Error(`need 2 web page tabs, found ${tabs.length}`);
+gZenViewSplitter.splitTabs(tabs, "vsep");
+await until(() => gZenViewSplitter.currentView >= 0, 5000, "the split view");
+await sleep(600);
+return { view: gZenViewSplitter.currentView };""", ()),
+        ("unsplit", """
+gZenViewSplitter.unsplitCurrentView();
+await until(() => gZenViewSplitter.currentView < 0, 5000, "the split to end");
+await sleep(600);
+return { view: gZenViewSplitter.currentView };""", ())]),
+
+    ("folder", True, [
+        ("created", """
+const s = window.__uicheck;
+const tabs = webTabs().slice(0, 2);
+if (tabs.length < 2) throw new Error(`need 2 web page tabs, found ${tabs.length}`);
+s.folderTabs = tabs;
+s.folder = gZenFolders.createFolder(tabs, {});
+await sleep(800);
+const other = webTabs()[0];
+if (other) gBrowser.selectedTab = other;
+await sleep(300);
+return { name: s.folder.name, tabs: s.folder.tabs.length, collapsed: s.folder.collapsed };""", ()),
+        ("collapsed", """
+const f = window.__uicheck.folder;
+await setFolderCollapsed(f, true);
+return { collapsed: f.collapsed };""", ()),
+        ("expanded", """
+const f = window.__uicheck.folder;
+await setFolderCollapsed(f, false);
+await sleep(300);
+return { collapsed: f.collapsed };""", ())]),
+
+    ("theme-picker", True, [("open", """
+const panel = byId("PanelUI-zen-gradient-generator");
+const shown = onPopup(panel, "popupshown");
+byId("cmd_zenOpenZenThemePicker").doCommand();
+await shown;
+await sleep(500);
+return { dots: panel.querySelectorAll(".zen-theme-picker-dot").length };""", ())]),
+
+    ("emoji-picker", True, [("open", """
+const panel = byId("PanelUI-zen-emojis-picker");
+const anchor = gZenWorkspaces.activeWorkspaceIndicator?.querySelector(".zen-current-workspace-indicator-icon");
+if (!anchor) throw new Error("no space icon to anchor the picker");
+const shown = onPopup(panel, "popupshown");
+// As changeWorkspaceIcon() opens it, minus saving; closing without a pick rejects the promise.
+Promise.resolve(gZenEmojiPicker.open(anchor, { closeOnSelect: false })).catch(() => {});
+await shown;
+const emojis = await until(() => byId("PanelUI-zen-emojis-picker-list").children.length, 5000, "the emoji list");
+await sleep(300);
+return { emojis };""", ())]),
+
+    ("site-data-panel", True, [("open", """
+await selectWebTab();
+gNavToolbox.setAttribute("zen-has-implicit-hover", "true");  // as src/zen/tests/site_control/head.js
+await sleep(400);
+const panel = byId("zen-unified-site-data-panel");
+const shown = onPopup(panel, "popupshown");
+byId("zen-site-data-icon-button").click();
+await shown;
+await sleep(500);
+return { url: gBrowser.currentURI.spec };""", ())]),
+
+    ("tab-context-menu", False, [("open", """
+const tab = await selectWebTab();
+const menu = byId("tabContextMenu");
+const shown = onPopup(menu, "popupshown");
+contextClick(tab);
+await shown;
+await sleep(300);
+return { items: [...menu.children].filter(i => i.localName == "menuitem" && !i.hidden).length };""", ())]),
+
+    ("space-context-menu", True, [("open", """
+const indicator = gZenWorkspaces.activeWorkspaceIndicator;
+if (!indicator) throw new Error("no space indicator");
+const menu = byId("zenWorkspaceMoreActions");
+const shown = onPopup(menu, "popupshown");
+contextClick(indicator);
+await shown;
+await sleep(300);
+return { items: [...menu.children].filter(i => i.localName == "menuitem" && !i.hidden).length };""", ())]),
+
+    ("command-palette", True, [("query", """
+const [query] = arguments;
+gURLBar.search(query);
+await gURLBar.lastQueryContextPromise;
+await until(() => gURLBar.view.isOpen, 5000, "the URL bar results");
+await sleep(500);
+const rows = [...document.querySelectorAll(".urlbarView-row")].filter(r => !r.hidden && r.result);
+return { query, rows: rows.length, providers: [...new Set(rows.map(r => r.result.providerName))],
+         actions: rows.filter(r => r.result.providerName == "ZenUrlbarProviderGlobalActions").length };""",
+                               ("compact",))]),
+
+    ("keyboard-shortcuts", True, [("list", """
+const { doc } = await openPrefs("paneZenCKS");
+const shortcuts = await until(() => doc.querySelectorAll(".zenCKSOption-input").length, 10000, "the shortcut list");
+doc.getElementById("zenCKSOption-wrapper").scrollIntoView({ block: "start" });
+await sleep(500);
+return { shortcuts };""", ())]),
+]
+
+# paneGeneral is registered only while the settings redesign is off (preferences.js init_all).
+PANES = ["paneGeneral", "paneHome", "paneSearch", "panePrivacy", "paneSync",
+         "paneZenLooks", "paneZenTabManagement", "paneZenCKS"]
+PANE = """
+const [pane] = arguments;
+const { win, doc, shown } = await openPrefs(pane);
+doc.querySelector(".main-content")?.scrollTo(0, 0);
+win.scrollTo(0, 0);
+await sleep(800);
+return { pane, hash: doc.location.hash, sections: shown };"""
+STEPS += [(f"settings-{p[4:].lower()}", p.startswith("paneZen"), [("top", PANE, (p,))]) for p in PANES]
+
+STEPS.append(("about-dialog", False, [("window", """
+openAboutDialog();
+const win = await until(() => {
+  const w = Services.wm.getMostRecentWindow("Browser:About");
+  return w && w.document.readyState == "complete" && w;
+}, 10000, "the About dialog");
+await sleep(1500);
+return { title: win.document.title, version: (v => v?.textContent || v?.value)(win.document.getElementById("version")),
+         rect: [win.screenX, win.screenY, win.outerWidth, win.outerHeight] };""", ())]))
+
+
+def shoot(rect, path):
+    zo.sh(["screencapture", "-x", "-R" + ",".join(str(int(v)) for v in rect), path])
+
+
+def run_steps(m, pid, out, zen):
+    startup = m.js(INSTALL)
+    results, gone = [], None
+    for i, (name, needs_zen, phases) in enumerate(STEPS):
+        r = {"step": name, "ok": True, "error": None, "errors": [], "shots": [], "info": {}}
+        results.append(r)
+        if needs_zen and not zen:
+            r.update(ok=None, error="skipped: not a Zen browser")
+            continue
+        if gone:
+            r.update(ok=False, error=f"not run: {gone}")
+            continue
+        try:
+            zo.ui("front", pid, check=False, timeout=10)
+            for shot, script, args in phases:
+                info = m.js(HELPERS + script, *args) or {}
+                r["info"][shot] = info
+                png = f"{i:02d}-{name}-{shot}.png"
+                time.sleep(0.3)
+                shoot(info.get("rect") or zo.WINDOW, os.path.join(out, png))
+                r["shots"].append(png)
+        except (ConnectionError, OSError) as e:
+            gone = f"browser connection lost ({e})"
+            r.update(ok=False, error=gone)
+            continue
+        except Exception as e:
+            r.update(ok=False, error=str(e))
+        try:
+            r["info"]["reset"] = m.js(RESET)
+            r["errors"] = m.js(TAKE_ERRORS)
+        except (ConnectionError, OSError) as e:
+            gone = f"browser connection lost ({e})"
+            r.update(ok=False, error=r["error"] or gone)
+        except Exception as e:
+            r["errors"].append(f"uicheck reset: {e}")
+    results[0]["errors"] = startup + results[0]["errors"]
+    return results
+
+
+def problems(r):
+    return ([r["error"]] if r["ok"] is False and r["error"] else []) + r["errors"]
+
+
+def contact_sheet(results, old, browser, path):
+    for r in results:
+        r["new"] = sorted(set(problems(r)) - old.get(r["step"], set()))
+    order = sorted(results, key=lambda r: (not r["new"], not problems(r), STEPS_ORDER[r["step"]]))
+    e = html.escape
+    cards = []
+    for r in order:
+        state = "skipped" if r["ok"] is None else "new" if r["new"] else "bad" if problems(r) else "ok"
+        lines = "".join(f"<li{' class=new' if p in r['new'] else ''}>{e(p)}</li>" for p in problems(r))
+        imgs = "".join(f'<a href="{e(s)}"><img src="{e(s)}" loading="lazy" title="{e(s)}"></a>' for s in r["shots"])
+        cards.append(f'<section class="{state}"><h2>{e(r["step"])} <small>{state}</small></h2>'
+                     f'<div class="shots">{imgs}</div><ul>{lines}</ul>'
+                     f'<pre>{e(json.dumps(r["info"], indent=1))}</pre></section>')
+    body = "".join(cards)
+    open(path, "w").write(f"""<!doctype html><meta charset="utf-8"><title>uicheck {e(browser)}</title>
+<style>
+body {{ font: 13px -apple-system, sans-serif; margin: 16px; background: #f4f4f4; }}
+section {{ background: #fff; border-left: 6px solid #3a3; margin: 0 0 16px; padding: 8px 12px; }}
+section.new {{ border-color: #d22; }} section.bad {{ border-color: #e90; }} section.skipped {{ border-color: #aaa; }}
+h2 {{ margin: 4px 0; font-size: 15px; }} small {{ color: #777; font-weight: normal; }}
+.shots img {{ width: 480px; margin: 4px 8px 4px 0; border: 1px solid #ccc; }}
+li {{ font-family: ui-monospace, monospace; }} li.new {{ color: #d22; }}
+pre {{ color: #555; font-size: 11px; white-space: pre-wrap; }}
+</style>
+<h1>uicheck: {e(browser)}, {time.strftime("%Y-%m-%d %H:%M")}</h1>
+<p>Red: problems new since the last run. Orange: known problems. Green: clean.</p>
+{body}
+""")
+
+
+STEPS_ORDER = {s[0]: i for i, s in enumerate(STEPS)}
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("browser")
+    p.add_argument("--template", default="zen-1.23.2b", help="template folder under perf.noindex/templates")
+    p.add_argument("--wait", type=int, default=10, help="seconds to wait after the tabs load")
+    a = p.parse_args()
+    b = json.load(open(os.path.join(zo.HERE, "browsers.json")))[a.browser]
+    if b["engine"] != "gecko":
+        sys.exit("uicheck drives Gecko builds only")
+    cfg = json.load(open(os.path.join(zo.HERE, "profiles.json")))
+    app = os.path.join(zo.RESEARCH, b["app"])
+    if zo.app_pids(app):
+        sys.exit(f"{app} is already running; quit it first")
+    out = os.path.join(zo.PERF, "uicheck", a.browser)
+    old = {}
+    try:
+        old = {r["step"]: set(problems(r)) for r in json.load(open(os.path.join(out, "uicheck.json")))["steps"]}
+    except (OSError, ValueError, KeyError):
+        pass
+    prof = os.path.join(out, "profile")
+    shutil.rmtree(out, ignore_errors=True)
+    os.makedirs(out)
+    zo.clone_tree(os.path.join(zo.TEMPLATES, a.template, "base"), prof)
+    zo.write_prefs(os.path.join(prof, "user.js"), dict(cfg["common"], **cfg[b["ui"]], **cfg["setup"]), "uicheck")
+    pid, _ = zo.launch(app, args=["-profile", prof, "--marionette", "-remote-allow-system-access"])
+    results = []
+    try:
+        zo.wait_window(pid)
+        zo.place_window(pid)
+        m = zo.Marionette()
+        m.sock.settimeout(120)  # every step script times itself out well before this
+        end = time.time() + 120
+        while not m.js(LOADED) and time.time() < end:
+            time.sleep(1)
+        time.sleep(a.wait)
+        results = run_steps(m, pid, out, b["ui"] == "zen")
+        m.quit()
+        zo.wait_exit(pid, 60)
+    finally:
+        zo.quit_app(pid)
+        shutil.rmtree(prof, ignore_errors=True)
+    contact_sheet(results, old, a.browser, os.path.join(out, "index.html"))
+    json.dump({"browser": a.browser, "template": a.template, "made": time.strftime("%Y-%m-%d %H:%M:%S"),
+               "steps": results}, open(os.path.join(out, "uicheck.json"), "w"), indent=2)
+    bad = [r for r in results if problems(r)]
+    for r in results:
+        state = "skip" if r["ok"] is None else "FAIL" if r["ok"] is False else "errors" if r["errors"] else "ok"
+        print(f"{state:6} {r['step']}" + (f": {r['error']}" if r["ok"] is False else ""))
+    print(f"{len(bad)} of {len(results)} steps with problems; contact sheet: {os.path.join(out, 'index.html')}")
+    sys.exit(1 if bad else 0)
+
+
+if __name__ == "__main__":
+    main()
