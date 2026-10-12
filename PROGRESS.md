@@ -6,7 +6,7 @@ Update this file at the end of every work session. Newest log entry first.
 
 Milestone 1, the baseline, started 2026-10-12.
 
-Next action: the measurement chain `scripts/perf/m1-batches` runs detached as job `m1` (log `../Zen-Origin-research/logs/m1.log`, pid in `m1.pid`) in this order: baseline-1, profiler-1, effects-1. It was restarted on 2026-10-12 at 22:47 with Safari added to baseline-1 and should end about 08:30 on 10-13. It resumes where it stopped if rerun. When it ends, run `scripts/perf/report baseline-1 --out docs/perf/2026-10-13-baseline` and the same for profiler-1 and effects-1, write the results into `docs/benchmarks.md`, then propose targets.
+Next action: the measurement chain `scripts/perf/m1-batches` runs detached as job `m1` (log `../Zen-Origin-research/logs/m1.log`, pid in `m1.pid`) in this order: baseline-1, profiler-1, effects-1. It was restarted on 2026-10-12 at 22:47 with Safari added to baseline-1 and should end about 08:30 on 10-13. It resumes where it stopped if rerun. A second job, `memory` (pid in `logs/memory.pid`), waits for `logs/m1.exit` and then runs batch memory-1: idle on Firefox and stock Zen with only the selected tab loaded, with and without spare processes (variants `on-demand` and `lean-memory`), about 50 minutes. When both end, run `scripts/perf/report baseline-1 --out docs/perf/2026-10-13-baseline` and the same for profiler-1, effects-1 and memory-1, write the results into `docs/benchmarks.md`, then propose the energy and memory targets.
 
 ## Milestones
 
@@ -52,6 +52,7 @@ Next action: the measurement chain `scripts/perf/m1-batches` runs detached as jo
 - 2026-10-12: Every scenario except launch waits 150 s after launch before measuring (calibration, batch calib-1).
 - 2026-10-12: Effects run per scenario with stock Zen as an interleaved control, so drift between hours stays out of the differences.
 - 2026-10-12: The project is called Origin, not Zen Origin (user). Docs, the spec and `scripts/env.sh` say Origin now. The local folders keep their `Zen-Origin` names, because the object dir, the mach state and the T3 thread depend on those paths. The icon is still to confirm before the first release.
+- 2026-10-12: The user wants the least system and battery use, and a browser that never uses more than 500 MB at a time. Batch memory-1 measures how low Gecko goes, and a memory target joins the energy targets.
 - 2026-10-12: The user had me quit the Safari that ran since 10-09 (pid 27252). Safari's baseline runs came after the Gecko ones instead of interleaved with them, so `docs/benchmarks.md` must say so. A two-run test (batch test-6) showed a fresh Safari opens only the 10 test tabs, restores nothing and does not pile up tabs between runs.
 
 ## Open questions for the user
@@ -65,6 +66,8 @@ Next action: the measurement chain `scripts/perf/m1-batches` runs detached as jo
 - When content moves, official Zen costs the whole machine 90 to 160 mW more than Firefox. Scroll is 349 against 236 mW, windowed video 264 against 174 and tab switching 365 against 207. The browser's own CPU energy is about the same. The extra is GPU work in WindowServer: scroll takes 33.5 against 21.6 ms of GPU time per second, windowed video 22.1 against 7.6. Window-wide vibrancy is the first suspect, and the effects batch measures it.
 - Official Zen beats Firefox at dragging the split-view divider (machine 1,489 against 2,145 mW) and at typing (149 against 167 mW).
 - Stock Zen built without LTO and PGO is slower than official Zen: first paint 1,311 against 1,131 ms, split drag 1,579 against 1,013 mW of app power, tab switching 141 against 114 mW. Release builds need LTO and PGO.
+- Memory with the 10 loaded tabs, summed over each browser's processes at the end of idle: Firefox 1,165 MB, official Zen 1,159 MB, Safari 528 MB (one run so far). Gecko spends 534 to 575 MB outside its content processes: the parent 254 to 300, the GPU process 171 to 198, utility, RDD and socket about 70. Safari spends 113 MB outside WebKit's processes.
+- Firefox keeps 3 spare content processes of about 21 MB each ready (`dom.ipc.processPrelaunch.fission.number`). It unloads tabs only when memory runs low (`browser.tabs.unloadOnLowMemory`). Zen 1.23.2b can unload a space or a folder by hand but has no automatic unloader.
 - `report`'s RefreshDriverTick count works on raw Gecko profiles. Firefox's parent main thread had 0 ticks in the idle window, and its ticks stop about 32 s after launch (profiler-1, firefox idle r1).
 - With no browser running, WindowServer draws 8 mW at 7.8% CPU and the machine 105 mW (batch test-5). WindowServer's CPU is high for an idle virtual screen, probably the remote screen session; it is the same floor under every browser.
 - At steady idle on frozen pages, Firefox and Zen both use about 0 mW and 1 to 3 wakeups/s (batch calib-1).

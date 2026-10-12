@@ -1,5 +1,5 @@
 {
-  "_comment": "One Zen visual effect turned off per variant, on top of the standard template. Switches come from docs/research/zen-effects-2026-10-12.md. 'scenarios' lists where the effect can cost something.",
+  "_comment": "One Zen visual effect turned off per variant, on top of the standard template. Switches come from docs/research/zen-effects-2026-10-12.md. 'scenarios' lists where the effect can cost something. Variants with no scenarios are memory settings for Firefox and Zen alike, which m1-batches skips and the memory batch runs on idle.",
   "no-vibrancy": {
     "what": "native window material (ZenWindowMaterialView) replaced by a plain view",
     "prefs": {"zen.widget.macos.window-vibrancy": false},
@@ -54,5 +54,16 @@
     "what": "native NSPopover arrow panels (Zen turns them on; Firefox ships them off)",
     "prefs": {"widget.macos.native-popovers": false},
     "scenarios": ["idle"]
+  },
+  "on-demand": {
+    "what": "only the selected tab loads at startup, as Firefox ships it for normal tabs, and pinned tabs wait too: what unloading background tabs leaves",
+    "prefs": {"browser.sessionstore.restore_on_demand": true, "browser.sessionstore.restore_pinned_tabs_on_demand": true},
+    "scenarios": []
+  },
+  "lean-memory": {
+    "what": "on-demand plus no spare content processes (Firefox keeps 3 ready) and no preloaded new tab page",
+    "prefs": {"browser.sessionstore.restore_on_demand": true, "browser.sessionstore.restore_pinned_tabs_on_demand": true,
+              "dom.ipc.processPrelaunch.enabled": false, "browser.newtab.preload": false},
+    "scenarios": []
   }
 }
