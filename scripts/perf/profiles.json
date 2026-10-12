@@ -1,5 +1,5 @@
 {
-  "_comment": "Prefs the harness writes into every Gecko profile template. Each one removes a first-run prompt or makes runs repeatable; none should change steady-state energy. 'setup' prefs are only present while Marionette builds the template.",
+  "_comment": "Prefs the harness writes into every Gecko profile, at template creation and again before every run. Each one removes a first-run prompt or makes runs repeatable. Two change Zen's startup on purpose: restore_pinned_tabs_on_demand false loads Essentials (the idle scenario has 10 loaded tabs), and continue-where-left-off true reopens the last tab instead of Zen's empty tab with the URL bar focused (the idle scenario has no text field focused). 'setup' prefs exist only while Marionette builds the template.",
   "common": {
     "browser.shell.checkDefaultBrowser": false,
     "browser.startup.page": 3,
@@ -19,7 +19,8 @@
   },
   "zen": {
     "zen.welcome-screen.seen": true,
-    "zen.updates.show-update-notification": false
+    "zen.updates.show-update-notification": false,
+    "zen.workspaces.continue-where-left-off": true
   },
   "firefox": {},
   "setup": {

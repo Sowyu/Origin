@@ -4,12 +4,13 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Builds a Gecko profile template for the energy harness through Marionette.
 
-Usage: scripts/perf/make-profile <browser> [base|split] [--warmup 180]
+Usage: scripts/perf/make-profile <browser> [base|split|vertical] [--warmup 180]
 
 The template holds 10 loaded tabs: for Zen, 4 in a "Work" space and 4 in a "Personal" space,
 each space with its own two-colour gradient, plus 2 Essentials; for Firefox, the same 8 tabs and
 2 pinned tabs. The split variant also has the first two Work tabs in a split view, and records
-where its divider sits on screen. The browser then idles for --warmup seconds so first-run
+where its divider sits on screen. The vertical variant (Firefox) has vertical tabs that expand on
+hover, for the sidebar scenario. The browser then idles for --warmup seconds so first-run
 downloads (Remote Settings, Safe Browsing lists, media plugins) finish, and quits cleanly so the
 session is saved. Marionette runs only here, never while measuring.
 Output: ../Zen-Origin-research/perf/templates/<template>/<variant>/ with layout.json beside it.
@@ -65,6 +66,8 @@ if (split) gBrowser.addTabSplitView([tabs[0], tabs[1]]);
 return { tabs: gBrowser.tabs.length };
 """
 
+VERTICAL = {"sidebar.verticalTabs": True, "sidebar.visibility": "expand-on-hover"}
+
 LOADED = "return [...gBrowser.tabs].every(t => !t.hasAttribute('busy') && !t.hasAttribute('pending'));"
 
 # Screen point of the split divider's centre, for the drag scenario.
@@ -83,7 +86,7 @@ return { x: Math.round(window.mozInnerScreenX + r.left + r.width / 2),
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("browser")
-    p.add_argument("variant", nargs="?", default="base", choices=["base", "split"])
+    p.add_argument("variant", nargs="?", default="base", choices=["base", "split", "vertical"])
     p.add_argument("--warmup", type=int, default=180)
     a = p.parse_args()
     browsers = json.load(open(os.path.join(zo.HERE, "browsers.json")))
@@ -100,6 +103,10 @@ def main():
     os.makedirs(work)
     prefs = dict(cfg["common"], **cfg[b["ui"]])
     zo.write_prefs(os.path.join(work, "user.js"), prefs, "harness prefs (scripts/perf/profiles.json)")
+    if a.variant == "vertical":
+        # Firefox keeps the sidebar launcher's state in the session, so vertical tabs must be on
+        # while the template is made, or the sidebar stays hidden when they are turned on later.
+        zo.write_prefs(os.path.join(work, "user.js"), VERTICAL, "vertical tabs, expand on hover")
     zo.write_prefs(os.path.join(work, "user.js"), cfg["setup"], "SETUP ONLY")
     x, y, w, h = zo.WINDOW
     json.dump({"chrome://browser/content/browser.xhtml": {"main-window": {

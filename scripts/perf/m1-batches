@@ -1,0 +1,35 @@
+#!/bin/sh
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+# Milestone 1 measurements in one unattended chain: the baseline (every scenario, 3 runs, every
+# browser in $BROWSERS), then each Zen effect turned off on its own in stock Zen, then profiler
+# runs for RefreshDriverTick markers. Every step resumes where it stopped, so rerunning the chain
+# after a crash only measures what is missing.
+# Usage: scripts/detach m1 scripts/perf/m1-batches
+set -u
+here="$(cd "$(dirname "$0")" && pwd)"
+BROWSERS="${BROWSERS:-zen-official,zen-stock,firefox}"
+SETTLE="${SETTLE:-45}"
+run() { "$here/run" --settle "$SETTLE" "$@" || echo "step failed: $*"; }
+
+run --batch baseline-1 --browsers "$BROWSERS" --scenarios all --runs 3
+
+# Effects: per scenario, stock Zen as the control interleaved with every variant that can cost
+# something there, so drift between hours does not leak into the differences.
+/usr/bin/python3 - "$here/variants.json" > /tmp/zo-effects-plan.txt <<'PY'
+import json, sys
+v = {k: d for k, d in json.load(open(sys.argv[1])).items() if not k.startswith("_")}
+scenarios = []
+for d in v.values():
+    scenarios += [s for s in d["scenarios"] if s not in scenarios]
+for s in scenarios:
+    print(s, ",".join(["zen-stock"] + [f"zen-stock+{k}" for k, d in v.items() if s in d["scenarios"]]))
+PY
+while read -r scen configs; do
+  run --batch effects-1 --browsers "$configs" --scenarios "$scen" --runs 3
+done < /tmp/zo-effects-plan.txt
+
+run --batch profiler-1 --browsers "$BROWSERS" --scenarios idle,minimized --runs 2 --profiler
+echo "m1 chain done"

@@ -45,8 +45,9 @@ def free_gb():
 def objdir():
     if not os.path.isdir(ENGINE):
         return None
-    dirs = [d for d in os.listdir(ENGINE) if d.startswith("obj-")]
-    return os.path.join(ENGINE, dirs[0]) if dirs else None
+    dirs = [os.path.join(ENGINE, d) for d in os.listdir(ENGINE) if d.startswith("obj-")]
+    # A failed configure can leave a near-empty obj dir beside the real one.
+    return max(dirs, key=lambda d: os.path.exists(os.path.join(d, "config.status"))) if dirs else None
 
 def system_memory():
     """Used memory the way Activity Monitor counts it (app + wired + compressed), plus swap, in MB."""

@@ -4,7 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Runs energy scenarios against browsers and saves raw data for scripts/perf/report.
 
-Usage: scripts/perf/run --batch NAME --browsers zen-official,firefox [--scenarios idle,scroll]
+Usage: scripts/perf/run --batch NAME --browsers zen-official,firefox,zen-stock+no-vibrancy [--scenarios idle,scroll]
                         [--runs 3] [--variant NAME] [--profiler] [--settle 45] [--keep]
 
 Runs are interleaved (run 1 of every scenario and browser, then run 2, ...) so slow drift on the
@@ -30,9 +30,9 @@ PARAGRAPH = (
 
 
 class Run:
-    def __init__(self, args, browser, b, scenario, index, variants):
+    def __init__(self, args, browser, b, scenario, index, variants, variant=None):
         self.args, self.name, self.b, self.scenario, self.index = args, browser, b, scenario, index
-        self.variant = args.variant
+        self.variant = variant
         label = browser + (f"+{self.variant}" if self.variant else "")
         self.dir = os.path.join(zo.RUNS, args.batch, label, scenario, f"r{index}")
         self.app = b["app"] if os.path.isabs(b["app"]) else os.path.join(zo.RESEARCH, b["app"])
@@ -50,7 +50,8 @@ class Run:
             raise RuntimeError(f"no template {src}; run scripts/perf/make-profile {self.name} {template_variant}")
         prof = os.path.join(self.dir, "profile")
         zo.clone_tree(src, prof)
-        prefs, css = {}, ""
+        cfg = json.load(open(os.path.join(zo.HERE, "profiles.json")))
+        prefs, css = dict(cfg["common"], **cfg[self.b["ui"]]), ""  # again, so edits apply without new templates
         if self.variant:
             v = self.variants[self.variant]
             prefs.update(v.get("prefs", {}))
@@ -73,8 +74,8 @@ class Run:
         env = {}
         if self.args.profiler and self.b["engine"] == "gecko":
             env = {"MOZ_PROFILER_STARTUP": "1", "MOZ_PROFILER_STARTUP_INTERVAL": "10",
-                   "MOZ_PROFILER_STARTUP_ENTRIES": "16777216",
-                   "MOZ_PROFILER_STARTUP_FEATURES": "power,markersallthreads,nostacksampling",
+                   "MOZ_PROFILER_STARTUP_ENTRIES": "4194304",
+                   "MOZ_PROFILER_STARTUP_FEATURES": "power,nostacksampling,nomarkerstacks",
                    "MOZ_PROFILER_STARTUP_FILTERS": "GeckoMain,Compositor,Renderer,RenderBackend",
                    "MOZ_PROFILER_SHUTDOWN": os.path.join(self.dir, "profile.json")}
         if self.b["engine"] == "gecko":
@@ -113,6 +114,12 @@ class Run:
         zo.ui("move", zo.PARK[0], zo.PARK[1], zo.PARK[0], zo.PARK[1], 50)
 
     def measure(self, name, seconds, action=None):
+        # What the window showed just before measuring, so a run that measured the wrong page or
+        # a focused text field can be told apart afterwards. Taken 2 s early to stay out of it.
+        shot = os.path.join(self.dir, f"{name}.png")
+        zo.sh(["screencapture", "-x", "-t", "png", "-R" + ",".join(map(str, zo.WINDOW)), shot], check=False)
+        self.meta.setdefault("titles", {})[name] = zo.ui("title", self.pid, check=False)
+        time.sleep(2)
         w = zo.Window(self.pid, seconds, self.dir, name)
         started = time.time()
         if action:
@@ -168,13 +175,14 @@ class Run:
                 for i in range(20):
                     zo.ui("key", self.pid, "right" if i % 2 == 0 else "left", "cmd,opt")
                     time.sleep(0.96)
-            self.measure("spaces", 22, spaces)
+            self.measure("spaces", 24, spaces)
 
     def s_sidebar(self):
         """Zen compact mode: the pointer glides to the window's left edge and back 20 times.
         Firefox: the same path over a vertical-tabs sidebar set to expand on hover. Safari has
         no hover sidebar, so it toggles its sidebar with Cmd+Shift+L 40 times."""
-        self.launch(); self.ready(); self.settle()
+        self.launch(template_variant="vertical" if self.b["ui"] == "firefox" else "base")
+        self.ready(); self.settle()
         x, y, w, h = zo.WINDOW
         inside, edge, row = x + 700, x + 2, y + 400
         if self.b["ui"] == "safari":
@@ -250,9 +258,7 @@ SCENARIOS = {
     "idle": {"fn": Run.s_idle},
     "minimized": {"fn": Run.s_minimized},
     "switch": {"fn": Run.s_switch},
-    "sidebar": {"fn": Run.s_sidebar, "prefs": {
-        "zen": {"zen.view.compact.enable-at-startup": True},
-        "firefox": {"sidebar.verticalTabs": True, "sidebar.visibility": "expand-on-hover"}}},
+    "sidebar": {"fn": Run.s_sidebar, "prefs": {"zen": {"zen.view.compact.enable-at-startup": True}}},
     "split": {"fn": Run.s_split},
     "scroll": {"fn": Run.s_scroll},
     "video-windowed": {"fn": Run.s_video_windowed},
@@ -286,8 +292,15 @@ def main():
     for s in scenarios:
         if s not in SCENARIOS:
             sys.exit(f"unknown scenario {s}")
-    if a.variant and a.variant not in variants:
-        sys.exit(f"unknown variant {a.variant}")
+    # A browser may carry a variant, "zen-stock+no-vibrancy", so a control and its variants
+    # interleave in one batch; --variant applies to the browsers that carry none.
+    configs = []
+    for n in names:
+        bname, _, var = n.partition("+")
+        var = var or a.variant
+        if bname not in browsers or (var and var not in variants):
+            sys.exit(f"unknown browser or variant in {n}")
+        configs.append((bname, var))
     batch_dir = os.path.join(zo.RUNS, a.batch)
     os.makedirs(batch_dir, exist_ok=True)
     json.dump({"argv": sys.argv, "started": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -295,9 +308,9 @@ def main():
               open(os.path.join(batch_dir, f"batch-{int(time.time())}.json"), "w"), indent=2)
     for i in range(a.first_run, a.first_run + a.runs):
         for s in scenarios:
-            for name in names:
+            for name, var in configs:
                 b = browsers[name]
-                r = Run(a, name, b, s, i, variants)
+                r = Run(a, name, b, s, i, variants, var)
                 if os.path.exists(os.path.join(r.dir, "meta.json")):
                     zo.log("done already:", r.dir)
                     continue
@@ -307,7 +320,7 @@ def main():
                         raise SystemExit(f"{r.app} is already running (pid {other}); refusing to measure")
                 q = {"waited_s": 0, "load": zo.load1(), "noisy": True, "test": True} if a.no_quiet else zo.quiet_wait(max_load=a.max_load)
                 r.meta["quiet"] = q
-                zo.log(f"run {i} {s} {name}{'+' + a.variant if a.variant else ''} (quiet after {q['waited_s']} s, load {q['load']})")
+                zo.log(f"run {i} {s} {name}{'+' + var if var else ''} (quiet after {q['waited_s']} s, load {q['load']})")
                 try:
                     SCENARIOS[s]["fn"](r)
                     r.meta["ok"] = True

@@ -27,6 +27,10 @@ let coalitionFields = [
     "gpu_energy_billed_to_others_nj",
 ]
 
+var timebase = mach_timebase_info_data_t()
+mach_timebase_info(&timebase)
+func ns(_ t: UInt64) -> UInt64 { t * UInt64(timebase.numer) / UInt64(timebase.denom) }
+
 typealias CoalitionInfo = @convention(c) (UInt64, UnsafeMutableRawPointer, Int) -> Int32
 let coalitionInfo = unsafeBitCast(dlsym(dlopen(nil, RTLD_NOW), "coalition_info_resource_usage")!, to: CoalitionInfo.self)
 
@@ -43,6 +47,11 @@ func coalitionUsage(_ id: UInt64) -> [String: UInt64]? {
     guard rc == 0, raw[23] == 7 else { return nil }
     var out: [String: UInt64] = [:]
     for (i, name) in coalitionFields.enumerated() where !name.isEmpty { out[name] = raw[i] }
+    // The CPU times arrive in mach ticks (41.67 ns on Apple Silicon; a 2 s busy loop added
+    // 49.8 million), the other times in ns. Convert so every *_ns field means nanoseconds.
+    for k in ["cpu_time_ns", "cpu_ptime_ns", "cpu_time_billed_to_me_ns", "cpu_time_billed_to_others_ns"] {
+        out[k] = out[k].map(ns)
+    }
     return out
 }
 
@@ -79,10 +88,6 @@ func commandLine(_ pid: pid_t) -> [String] {
     }
     return parts
 }
-
-var timebase = mach_timebase_info_data_t()
-mach_timebase_info(&timebase)
-func ns(_ t: UInt64) -> UInt64 { t * UInt64(timebase.numer) / UInt64(timebase.denom) }
 
 func processUsage(_ pid: pid_t) -> [String: Any]? {
     var info = rusage_info_v6()

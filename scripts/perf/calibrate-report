@@ -1,0 +1,51 @@
+#!/usr/bin/python3
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Power over time after launch, from `calibrate` runs, to choose the settle time.
+
+Usage: scripts/perf/calibrate-report <batch>
+Prints one row per 15 s step: the browser coalition's power and wakeups, and WindowServer's power.
+"""
+import glob, json, os, sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import zo
+
+STEP_S = 15
+
+
+def series(path, launched_ms):
+    rows = [json.loads(l) for l in open(path) if l.strip()]
+    out, prev = [], None
+    for r in rows:
+        if prev is None or r["t_ns"] - prev["t_ns"] >= STEP_S * 1e9 - 1e8:
+            if prev is not None:
+                dur = (r["t_ns"] - prev["t_ns"]) / 1e9
+                c0, c1 = prev["coalition"], r["coalition"]
+                w0, w1 = prev["windowserver"], r["windowserver"]
+                out.append({
+                    "app_mw": (c1["energy_nj"] - c0["energy_nj"]) / dur / 1e6,
+                    "wakeups": ((c1["interrupt_wakeups"] + c1["platform_idle_wakeups"])
+                                - (c0["interrupt_wakeups"] + c0["platform_idle_wakeups"])) / dur,
+                    "ws_mw": (w1["energy_nj"] - w0["energy_nj"]) / dur / 1e6,
+                })
+            prev = r
+    return out
+
+
+def main():
+    batch = sys.argv[1]
+    for d in sorted(glob.glob(os.path.join(zo.RUNS, batch, "*", "calibrate", "r*"))):
+        meta = json.load(open(os.path.join(d, "meta.json")))
+        s = series(os.path.join(d, "calibrate.zostat.jsonl"), meta["launched_ms"])
+        start = (meta["windows"][0]["t0_ms"] - meta["launched_ms"]) / 1000
+        print(f"\n{d.split(os.sep)[-3]} {d.split(os.sep)[-1]} (first sample {start:.0f} s after open)")
+        print("   s after open   app mW   wakeups/s   WindowServer mW")
+        for i, r in enumerate(s):
+            t = start + (i + 1) * STEP_S
+            print(f"   {t:12.0f}   {r['app_mw']:6.0f}   {r['wakeups']:9.0f}   {r['ws_mw']:15.0f}")
+
+
+if __name__ == "__main__":
+    main()

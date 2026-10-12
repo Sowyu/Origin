@@ -73,4 +73,20 @@ Every scenario runs 3 times per browser, interleaved (run 1 of everything, then 
 
 ## Results
 
-None yet.
+### Stock Zen build, 2026-10-12
+
+Zen 1.23.2b from its tag without changes, Zen's release options without LTO and PGO (`scripts/build-zen`, stats in `../Zen-Origin-research/logs/build-stats/2026-10-12-141812/`). One build, so no range.
+
+| Phase | Wall time |
+|---|---|
+| Unpack the 811 MB Firefox source and commit it in `engine/` (surfer download, tarball already cached; the download itself took about 10 s) | 274 s |
+| Import Zen's 264 patches and prefs | 5 s |
+| `mach bootstrap` (toolchains, about 3.4 GB into `~/.mozbuild`) | 77 s |
+| `mach build` | 1,404 s (23 min 24 s) |
+| `mach package` (DMG) | 101 s |
+| Total from unpacked tarball to DMG | 1,861 s (31 min) |
+
+- Memory: the machine peaked at 14,155 MB used of 16,384 MB (app, wired and compressed memory), the build's own processes at 8,238 MB resident together. Swap grew from 443 MB to 2,965 MB and memory pressure reached the warning level, never critical. Light work ran beside it: two browser profile templates and the CandyWrapper agents' idle load.
+- Disk: `engine/` 11.2 GB (Firefox source with Zen's patches 6.3 GB, object dir 4.9 GB), `~/.mozbuild` 3.3 GB, Rust 1.0 GB, cached tarball 0.8 GB, `node_modules` 0.1 GB: about 16.4 GB. Free space went from 134 GB to 116 GB.
+- Output: a 125 MB DMG holding a 385 MB arm64 app (the official universal app is 578 MB).
+- Spotlight began indexing the 400,000 files of `engine/` after the build and kept the load average near 15. A `.metadata_never_index` file did not stop it; `engine/` is now a symlink to `engine.noindex/`, which Spotlight skips.
