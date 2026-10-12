@@ -1,6 +1,6 @@
 # Cuts
 
-Every Zen feature Zen Origin removes, one line each, so the user can veto any of them. Nothing is removed yet: the cuts land in milestone 2. Evidence with file and line numbers is in `docs/research/zen-features-2026-10-12.md`.
+Every Zen feature Origin removes, one line each, so the user can veto any of them. Nothing is removed yet: the cuts land in milestone 2. Evidence with file and line numbers is in `docs/research/zen-features-2026-10-12.md`.
 
 Status 2026-10-12: proposed, waiting for the user's review.
 
@@ -30,7 +30,7 @@ Status 2026-10-12: proposed, waiting for the user's review.
 - Zen's native share sheet: the macOS share menu behind the copy-link toast. Firefox's own File > Share menu stays.
 - Workspace bookmarks: bookmarks that belong to one space, stored in two extra tables in `places.sqlite` and wired in through 6 Places patches.
 - Site data panel: Zen's replacement for Firefox's site identity and permissions popup in the URL bar; Firefox's own popup comes back. Check: Firefox's popup must look right beside Zen's URL bar before this one goes.
-- Hidden AI settings: Zen hides Firefox's AI controls page. Zen Origin blocks AI by pref (translation stays on) and shows Firefox's page as it ships, so you can see what is off.
+- Hidden AI settings: Zen hides Firefox's AI controls page. Origin blocks AI by pref (translation stays on) and shows Firefox's page as it ships, so you can see what is off.
 
 ## Replace with Firefox's own, after the rewrite study
 

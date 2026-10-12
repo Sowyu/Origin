@@ -4,7 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
 # Milestone 1 measurements in one unattended chain: the baseline (every scenario, 3 runs, every
-# browser in $BROWSERS plus a no-browser floor), profiler runs for RefreshDriverTick markers, then
+# browser in $BROWSERS plus Safari and a no-browser floor), profiler runs for RefreshDriverTick markers, then
 # each Zen effect turned off on its own in stock Zen. Settle is 150 s: calibration (batch calib-1)
 # found one-off startup bursts of 250-560 mW with 4-6 MB of writes up to 124 s after launch.
 # Every step resumes where it stopped, so rerunning the chain after a crash only measures what
@@ -16,7 +16,7 @@ BROWSERS="${BROWSERS:-zen-official,zen-stock,firefox}"
 SETTLE="${SETTLE:-150}"
 run() { "$here/run" --settle "$SETTLE" "$@" || echo "step failed: $*"; }
 
-run --batch baseline-1 --browsers "none,$BROWSERS" --scenarios all --runs 3
+run --batch baseline-1 --browsers "none,$BROWSERS,safari" --scenarios all --runs 3
 
 run --batch profiler-1 --browsers "$BROWSERS" --scenarios idle,minimized --runs 2 --profiler
 

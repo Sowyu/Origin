@@ -1,10 +1,10 @@
-# Zen Origin spec
+# Origin spec
 
 Written 2026-10-12 from my answers in chat. This file is the source of truth for scope and hard rules. Decisions made later go in `PROGRESS.md`.
 
 ## Goal
 
-Build Zen Origin, a fork of Zen Browser for macOS on Apple Silicon, released publicly on GitHub. It should feel like Zen, look great and use as little energy as a Gecko browser can. Zen today is bloated, so cut everything I don't use and make the rest lean.
+Build Origin, a fork of Zen Browser for macOS on Apple Silicon, released publicly on GitHub. It should feel like Zen, look great and use as little energy as a Gecko browser can. Zen today is bloated, so cut everything I don't use and make the rest lean.
 
 Also find out whether rewriting Zen's UI layer would beat trimming it in place. Bring me numbers and a recommendation before you start any rewrite.
 
@@ -185,7 +185,7 @@ Rules:
 - Take the entitlements from Firefox's own hardened runtime files.
 - Use Firefox's built-in updater with the fork's own MAR signing key and an update feed on GitHub Pages.
 - Keep the MAR private key in the release keychain like CandyWrapper's Sparkle key, never in the repo.
-- Publish releases at github.com/Sowyu/Zen-Origin with an arm64 DMG and SHA-256 sums.
+- Publish releases at github.com/Sowyu/Origin with an arm64 DMG and SHA-256 sums.
 - Give the fork its own bundle ID and profile folder, so it runs beside stock Zen.
 - A copy of a profile from the matching Zen release must open in the fork with workspaces, Essentials, folders and pinned tabs intact.
 - Ship the fork within 3 days of each Zen release that carries a Firefox security fix.
@@ -196,7 +196,7 @@ I have no Developer ID, so builds aren't notarized. Explain in the README how to
 
 Check early that Widevine plays Netflix, Spotify and a Widevine test page in a build you made and signed. If it needs Google's VMP signing, find out what that takes and tell me. Check that Firefox Sync signs in and syncs as well.
 
-The repo calls the fork Zen Origin. Confirm the final name and icon with me before the first public release, because Zen has no written trademark policy and a name with "Zen" in it could draw a complaint.
+The repo calls the fork Origin. Confirm the final name and icon with me before the first public release, because Zen has no written trademark policy and a name with "Zen" in it could draw a complaint.
 
 ## This machine
 

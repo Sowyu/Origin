@@ -1,6 +1,6 @@
-# Zen Origin
+# Origin
 
-A lean fork of Zen Browser for macOS on Apple Silicon, on Gecko. It should feel like Zen, look as good and use as little energy as a Gecko browser can. Releases go to github.com/Sowyu/Origin (the user renamed it from Zen-Origin on 2026-10-12; the old URL redirects).
+A lean fork of Zen Browser for macOS on Apple Silicon, on Gecko. It should feel like Zen, look as good and use as little energy as a Gecko browser can. Releases go to github.com/Sowyu/Origin. The user renamed the project from Zen Origin to Origin on 2026-10-12. The local folders `Zen-Origin` and `Zen-Origin-research` keep their names, because the object dir, the mach state and this thread's working folder depend on them.
 
 Start every session in this order:
 
@@ -39,7 +39,8 @@ Update `PROGRESS.md` before you stop: tick what you finished, add what you learn
 - Homebrew installs fail here (`/opt/homebrew/var/log` belongs to root), so tools go into `../Zen-Origin-research/tools`.
 - Never write to `~/.t3`. Kill only processes whose PID you started and recorded.
 - Official Zen and Firefox copies in `../Zen-Origin-research/builds/` stay byte-identical to their DMGs: editing the bundle breaks the seal and Gatekeeper calls Zen damaged. App updates are off through per-user policy defaults instead (`defaults write app.zen-browser.zen DisableAppUpdate -bool YES`, same for `org.mozilla.firefox`, plus `EnterprisePoliciesEnabled`).
-- A Safari that this harness did not start has run since 2026-10-09 (pid 27252). Never quit it; `open -n` starts a second instance beside it.
+- Safari runs use the user's own Safari data on this Mac. At the user's request I quit the Safari that had run since 2026-10-09 (pid 27252) on 2026-10-12, so the harness now starts the only instance. If a Safari the harness did not start shows up again, ask the user before quitting it.
+- Run `scripts/perf/report` only while no batch is measuring. It parses every powermetrics file and keeps a core busy for about a minute per 100 runs.
 - Long jobs (builds, measurement batches) must run detached in their own session, because the harness kills background commands at its time limit. Use `scripts/detach`.
 
 ## Repo layout

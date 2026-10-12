@@ -12,5 +12,5 @@ export SURFER_PLATFORM=darwin
 export CARGO_INCREMENTAL=0
 # Surfer commits the pristine Firefox tree in engine/ and silently skips the commit without an
 # identity, which later breaks mach. These commits stay local.
-export GIT_AUTHOR_NAME="Zen Origin build" GIT_AUTHOR_EMAIL="build@zen-origin.invalid"
-export GIT_COMMITTER_NAME="Zen Origin build" GIT_COMMITTER_EMAIL="build@zen-origin.invalid"
+export GIT_AUTHOR_NAME="Origin build" GIT_AUTHOR_EMAIL="build@origin.invalid"
+export GIT_COMMITTER_NAME="Origin build" GIT_COMMITTER_EMAIL="build@origin.invalid"

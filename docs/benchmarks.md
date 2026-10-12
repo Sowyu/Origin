@@ -1,6 +1,6 @@
 # Benchmarks
 
-How Zen Origin measures energy, and every number it has. Raw data lives in `../Zen-Origin-research/perf.noindex/runs/`; per-batch tables are in `docs/perf/`.
+How Origin measures energy, and every number it has. Raw data lives in `../Zen-Origin-research/perf.noindex/runs/`; per-batch tables are in `docs/perf/`.
 
 ## Method
 
