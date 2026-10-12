@@ -17,7 +17,7 @@ import argparse, json, os, shutil, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import zo
 
-KEPT = ["gZenWorkspaces", "gZenUIManager", "gZenVerticalTabsManager", "gZenCompactMode", "gZenViewSplitter",
+KEPT = ["gZenWorkspaces", "gZenUIManager", "gZenVerticalTabsManager", "gZenCompactModeManager", "gZenViewSplitter",
         "gZenFolders", "gZenPinnedTabManager", "gZenThemePicker", "gZenKeyboardShortcutsManager", "gZenEmojiPicker"]
 CUT = ["gZenGlanceManager", "gZenBoostsManager", "gZenLibrary", "gZenMods", "gZenMediaController",
        "gZenLiveFoldersUI", "gZenShareManager", "gZenSpaceRoutingManager", "gZenMarketplaceManager"]
@@ -34,7 +34,7 @@ let spaces = null, tabs = null, essentials = null;
 try {
   await gZenWorkspaces.promiseInitialized;
   spaces = gZenWorkspaces.getWorkspaces().map(w => w.name);
-  const all = gZenWorkspaces.allStoredTabs;
+  const all = gZenWorkspaces.allStoredTabs.filter(t => !t.hasAttribute("zen-empty-tab"));
   tabs = all.length;
   essentials = all.filter(t => t.hasAttribute("zen-essential")).length;
 } catch (e) {
@@ -60,6 +60,7 @@ def main():
     out = os.path.join(zo.PERF, "smoke", a.browser)
     prof = os.path.join(out, "profile")
     shutil.rmtree(out, ignore_errors=True)
+    os.makedirs(out)
     zo.clone_tree(os.path.join(zo.TEMPLATES, a.template, "base"), prof)
     zo.write_prefs(os.path.join(prof, "user.js"), dict(cfg["common"], **cfg[b["ui"]], **cfg["setup"]), "smoke test")
     pid, _ = zo.launch(app, args=["-profile", prof, "--marionette", "-remote-allow-system-access"])
