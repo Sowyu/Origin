@@ -10,14 +10,19 @@ Mac mini M4 (10 cores), 16 GB, macOS 27.0.1, on AC power, no battery. The screen
 
 The machine is shared with CandyWrapper agents. Before every launch the harness waits for a quiet machine: no compiler, linker, `xcodebuild` or `mach build` running and the 1-minute load average under 3.5 for 20 s, for at most 15 minutes. A run that could not get quiet is marked noisy in its `meta.json` and in the tables.
 
+Builds and measurements never overlap. `scripts/perf/hold <command>` pauses the batch chain between runs, waits until the running batch sits in its quiet wait, runs the command and then lets the chain go on. Each run's quiet wait honours the pause, and only one hold runs at a time.
+
 ### Browsers
 
 | Name | What it is |
 |---|---|
 | zen-official | Zen 1.23.2b from its universal DMG (thin LTO and two-stage PGO, cross-compiled by Zen's CI) |
 | zen-stock | Zen 1.23.2b built here from the 1.23.2b tag without changes, Zen's release options without LTO and PGO |
+| origin | Origin built here from `main` (`builds/origin-1.23.2b/Origin.app`): Zen 1.23.2b with the cuts in `docs/cuts.md` and Origin's prefs, the same build options as zen-stock |
 | firefox | Firefox 157.0.1 en-US from Mozilla's DMG, the version Zen 1.23.2b is based on |
 | safari | Safari 27.0.1 as installed |
+
+Both self-built browsers lack LTO and PGO, so Origin compares with zen-stock like for like. Official Zen shows what LTO and PGO add.
 
 App bundles stay byte-identical to their DMGs. App updates are off through per-user enterprise policy defaults (`defaults write <bundle id> EnterprisePoliciesEnabled -bool YES` and `DisableAppUpdate -bool YES`), because editing a bundle breaks its seal and Gatekeeper then refuses Zen.
 
@@ -64,6 +69,39 @@ The main number per scenario is the browser's power (its coalition's energy divi
 | bgtimer | the idle scenario with an extra background tab running a 1 s `setInterval` | 60 s |
 
 Every scenario runs 3 times per browser, interleaved (run 1 of everything, then run 2, then run 3) so slow drift on the machine spreads over all browsers. Tables report the median and the range.
+
+### Variants
+
+A variant is a browser plus a set of prefs or `userChrome.css` rules from `scripts/perf/variants.json`, written `browser+variant` (for example `origin+min-visual`). Each of the single-effect variants (no-vibrancy, no-gradient and so on) turns one Zen effect off in stock Zen and runs in effects-1. These are the other variants:
+
+| Variant | What it changes | Batch |
+|---|---|---|
+| min-visual | Every Zen effect off at once, the lower bound for Zen's look | origin-1 on Origin, effects-1 on stock Zen |
+| on-demand | Only the selected tab loads at startup and pinned tabs wait too, which is what unloading background tabs leaves | memory-1 |
+| lean-memory | on-demand, plus no spare content processes and no preloaded new tab page | memory-1 |
+| unload-1min | Origin's tab unloader set to 1 minute, so idle measures memory after background tabs unload | memory-1 |
+| quiet-newtab | Blank homepage and new tab page, 12 low-risk widget feeds and the wallpaper fetch off | origin-1 |
+| reduced-motion | The system's Reduce Motion setting; defined but not run, because it also changes what websites see | none |
+
+### Batches
+
+`scripts/perf/m1-batches` runs the chain unattended in this order, and every step resumes where it stopped.
+
+| Batch | What it compares |
+|---|---|
+| baseline-1 | Official Zen, stock Zen, Firefox and Safari on every scenario, plus the no-browser floor |
+| origin-1 | Origin against stock Zen as an interleaved control and against Origin with min-visual, on the scenarios where something moves, plus Origin on every scenario beside the no-browser floor and quiet-newtab on launch and idle |
+| memory-1 | Idle memory of Firefox, stock Zen and Origin with on-demand, lean-memory and unload-1min |
+| profiler-1 | `RefreshDriverTick` markers at idle and minimized for every Gecko browser including Origin, 2 runs |
+| effects-1 | Each Zen effect off on its own in stock Zen and all at once, per scenario, with stock Zen as an interleaved control |
+
+effects-1 leaves out idle, because Zen already sits at the no-browser floor there, and launch, because its only effect is cut. The settle time is 150 s, because batch calib-1 found startup bursts up to 124 s after launch.
+
+### Tools
+
+- `scripts/perf/smoke` opens a build on a copy of a template and checks spaces, tabs, Essentials, kept and cut globals and console errors.
+- `scripts/perf/compare` builds side-by-side tables from report files and marks ranges that overlap as noise.
+- `scripts/perf/memreport` saves about:memory per process and compares the reports across browsers.
 
 ### Known limits
 
