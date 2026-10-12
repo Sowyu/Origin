@@ -29,8 +29,9 @@ Next action: the measurement chain `scripts/perf/m1-batches` runs detached (log 
 - [x] Templates: firefox-157.0.1/base, zen-1.23.2b/base
 - [x] Templates: split variants for Firefox and Zen, vertical-tabs variant for Firefox
 - [x] Functional test of every scenario on Firefox and Zen (batches test-3 and test-4, all 22 runs ok, screenshots checked)
-- [ ] Calibration run (5 minutes of idle per browser) to confirm the 45 s settle time
-- [ ] Measure official Zen, official Firefox, Safari and self-built stock Zen on all scenarios, 3 runs each
+- [x] Calibration (batch calib-1): one-off startup bursts of 250-560 mW with 4-6 MB of writes up to 124 s after launch, then about 0 mW; settle raised to 150 s
+- [ ] Measure official Zen, official Firefox and self-built stock Zen on all scenarios, 3 runs each (chain `m1` started 2026-10-12 16:06, expected to end about 06:00 on 10-13)
+- [ ] Safari on all scenarios (waits for the user's answer about the running Safari)
 - [ ] Profiler runs: RefreshDriverTick markers at idle per Gecko browser
 - [ ] Measure each Zen visual effect by turning it off on its own (`scripts/perf/variants.json`)
 - [ ] Propose a target per scenario and get the user's OK
@@ -47,6 +48,9 @@ Next action: the measurement chain `scripts/perf/m1-batches` runs detached (log 
 - 2026-10-12: App bundles stay unmodified. A `policies.json` inside Zen's bundle broke its seal and Gatekeeper called Zen damaged; per-user policy defaults turn app updates off instead.
 - 2026-10-12: Frozen pages have their scripts stripped, so idle numbers measure browsers, not page scripts. Each page gets its own `*.localhost` host so Gecko gives each site its own process.
 - 2026-10-12: Harness profiles load every tab at startup, including Zen's Essentials (`restore_pinned_tabs_on_demand` false; Zen ships it true), because the spec's idle scenario has 10 loaded tabs.
+- 2026-10-12: Zen profiles set `zen.workspaces.continue-where-left-off` true. Zen's default opens its empty tab with the URL bar focused at every launch, which breaks the spec's "no text field focused" and made a split-view drag click a live youtube.com tile.
+- 2026-10-12: Every scenario except launch waits 150 s after launch before measuring (calibration, batch calib-1).
+- 2026-10-12: Effects run per scenario with stock Zen as an interleaved control, so drift between hours stays out of the differences.
 
 ## Open questions for the user
 
@@ -56,6 +60,10 @@ Next action: the measurement chain `scripts/perf/m1-batches` runs detached (log 
 - Self-built builds have no Google Safe Browsing API key (Zen's CI injects one). Safe Browsing must work in the fork, so it needs its own key from a Google Cloud project (free, needs a Google account).
 
 ## Facts learned
+
+- With no browser running, WindowServer draws 8 mW at 7.8% CPU and the machine 105 mW (batch test-5). WindowServer's CPU is high for an idle virtual screen, probably the remote screen session; it is the same floor under every browser.
+- At steady idle on frozen pages, Firefox and Zen both use about 0 mW and 1 to 3 wakeups/s (batch calib-1).
+- Widevine 4.10.3050.0 plays Google's test stream in stock Zen built and signed here; `VerifyCdmHost_0 returned true` for all browsers, but only Firefox has the `.sig` files (`docs/drm-sync.md`).
 
 - Official Zen ships no Widevine `.sig` files (official Firefox has five), and Zen's FAQ says Netflix and Spotify don't play (`docs/research/drm-sync-2026-10-12.md`).
 - Zen fixed its macOS battery issue #12464 by moving to the window-wide `NSVisualEffectView` in 1.21.15b (PR #15006); nobody posted numbers (`docs/research/zen-issues-2026-10-12.md`).
@@ -74,3 +82,6 @@ Next action: the measurement chain `scripts/perf/m1-batches` runs detached (log 
 - Zen 1.23.2b is still the latest stable (tag 185e856, released 2026-10-09, Firefox 157.0.1). Firefox 157's configure requires at least the macOS 26.5 SDK.
 - Research agents wrote the issue, feature, effect and DRM/Sync inventories in `docs/research/`; a fixtures agent froze 11 pages and the video.
 - Built the harness, the Firefox and Zen templates, `docs/cuts.md` and the method part of `docs/benchmarks.md`.
+- Stock build done (23.4 min compile). Spotlight then indexed `engine/` at a load of 15; moved it to `engine.noindex` behind a symlink.
+- Functional tests caught: coalition CPU in mach ticks, Zen's empty startup tab, Firefox's hidden sidebar launcher, input pacing. All 22 runs pass now.
+- Widevine check passed on the test stream; calibration set the settle time; started the measurement chain.

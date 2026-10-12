@@ -32,5 +32,11 @@
     "ui": "zen",
     "template": "zen-1.23.2b",
     "note": "zen-stock signed with the Apple Development identity and Firefox's hardened runtime entitlements (scripts/sign-app); for the DRM check"
+  },
+  "none": {
+    "app": "",
+    "engine": "none",
+    "ui": "none",
+    "note": "no browser: WindowServer's coalition and the machine with nothing launched, for scale"
   }
 }

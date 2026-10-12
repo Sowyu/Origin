@@ -154,6 +154,18 @@ class Run:
         self.launch(); self.ready(); self.settle(); self.park()
         self.measure("idle", 60)
 
+    def s_empty(self):
+        """No browser at all: WindowServer's coalition stands in for the app, so its numbers and the
+        machine's show the floor every browser sits on."""
+        if self.b["engine"] != "none":
+            raise Skip("only for the 'none' browser")
+        ws = int(zo.sh(["pgrep", "-x", "WindowServer"]).split()[0])
+        self.pid = None
+        self.meta["windowserver_pid"] = ws
+        time.sleep(5)
+        w = zo.Window(ws, 60, self.dir, "empty")
+        self.meta["windows"].append(w.wait())
+
     def s_calibrate(self):
         """Five minutes of idle from launch in 5 s steps, to choose the settle time."""
         self.launch(); self.ready(); self.park()
@@ -266,8 +278,9 @@ SCENARIOS = {
     "typing": {"fn": Run.s_typing},
     "bgtimer": {"fn": Run.s_bgtimer},
     "calibrate": {"fn": Run.s_calibrate},
+    "empty": {"fn": Run.s_empty},
 }
-ALL = ["launch", "idle", "minimized", "switch", "sidebar", "split", "scroll", "video-windowed",
+ALL = ["empty", "launch", "idle", "minimized", "switch", "sidebar", "split", "scroll", "video-windowed",
        "video-fullscreen", "typing", "bgtimer"]
 
 
@@ -280,7 +293,7 @@ def main():
     p.add_argument("--first-run", type=int, default=1)
     p.add_argument("--variant")
     p.add_argument("--profiler", action="store_true")
-    p.add_argument("--settle", type=float, default=45)
+    p.add_argument("--settle", type=float, default=150)
     p.add_argument("--max-load", type=float, default=3.5)
     p.add_argument("--keep", action="store_true", help="keep profile copies")
     p.add_argument("--no-quiet", action="store_true", help="functional test: skip the quiet wait, mark runs noisy")
@@ -320,7 +333,11 @@ def main():
                     zo.log("done already:", r.dir)
                     continue
                 os.makedirs(r.dir, exist_ok=True)
-                for other in zo.app_pids(r.app):
+                if b["engine"] == "none" and s != "empty":
+                    continue
+                if b["engine"] != "none" and s == "empty":
+                    continue
+                for other in (zo.app_pids(r.app) if b["engine"] != "none" else []):
                     if b["engine"] == "gecko":
                         raise SystemExit(f"{r.app} is already running (pid {other}); refusing to measure")
                 q = {"waited_s": 0, "load": zo.load1(), "noisy": True, "test": True} if a.no_quiet else zo.quiet_wait(max_load=a.max_load)
