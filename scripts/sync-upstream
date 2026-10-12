@@ -1,0 +1,237 @@
+#!/bin/bash
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+# Moves Origin onto the latest stable Zen release.
+#
+#   scripts/sync-upstream             import the tag onto `upstream`, rebase `main` onto it
+#   scripts/sync-upstream --dry-run   report the tag, its Firefox version and expected conflicts
+#   scripts/sync-upstream --tag 1.23.2b   use this tag instead of the latest stable one
+#   scripts/sync-upstream --continue  after fixing a conflict it stopped on and running git add
+#
+# Steps:
+# 1. Find the newest stable tag (not twilight, not rc) on zen-browser/desktop.
+# 2. Fetch it with depth 1 and add its tree as a new commit on `upstream`, parented on the
+#    previous one. Zen's history is not imported.
+# 3. Rebase main: git rebase --onto upstream <old upstream> main.
+# 4. Resolve by itself only the conflicts where Origin deleted a file (it stays deleted) and
+#    anything under .github that comes from Zen. Any other conflict stops with a list.
+# 5. Print the next steps. It never builds, measures or releases.
+#
+# Running it again is safe: if `upstream` already holds the tag, it only rebases main if main
+# does not contain upstream yet.
+set -eu
+
+# ZEN_REPO overrides the source, for testing against a local repo.
+ZEN=${ZEN_REPO:-https://github.com/zen-browser/desktop}
+cd "$(dirname "$0")/.."
+
+dry_run=0
+cont=0
+tag=
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) dry_run=1 ;;
+    --continue) cont=1 ;;
+    --tag) tag=${2:?--tag needs a value}; shift ;;
+    -h|--help) sed -n '5,/^set -eu$/p' "$0" | sed '$d'; exit 0 ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+die() { echo "sync-upstream: $*" >&2; exit 1; }
+
+in_rebase() { [ -e "$(git rev-parse --git-path rebase-merge)" ] || [ -e "$(git rev-parse --git-path rebase-apply)" ]; }
+
+# Refuse to start on top of unfinished work.
+if [ "$cont" = 1 ]; then
+  in_rebase || die "--continue: no rebase in progress"
+  [ "$dry_run" = 0 ] && [ -z "$tag" ] || die "--continue takes no other option"
+else
+  for f in rebase-merge rebase-apply MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD; do
+    [ -e "$(git rev-parse --git-path "$f")" ] && die "a rebase, merge or cherry-pick is in progress ($f). Finish or abort it first."
+  done
+  [ -z "$(git status --porcelain --untracked-files=no)" ] || die "the working tree has uncommitted changes. Commit or stash them first."
+fi
+git rev-parse -q --verify refs/heads/upstream >/dev/null || die "no local upstream branch"
+git rev-parse -q --verify refs/heads/main >/dev/null || die "no local main branch"
+
+old=$(git rev-parse refs/heads/upstream)
+# The upstream commit subject is "Zen <tag>".
+old_tag=$(git log -1 --format=%s "$old" | sed -n 's/^Zen //p')
+[ -n "$old_tag" ] || die "cannot read the tag from the upstream commit subject: $(git log -1 --format=%s "$old")"
+
+# Stable tags look like 1.23.2b. Twilight and rc tags are skipped.
+[ "$cont" = 1 ] && tag=$old_tag
+if [ -z "$tag" ]; then
+  tag=$(git ls-remote --tags --refs "$ZEN" | sed 's|.*refs/tags/||' \
+    | grep -E '^[0-9]+(\.[0-9]+)*b?$' | sort -V | tail -1)
+  [ -n "$tag" ] || die "found no stable tag at $ZEN"
+fi
+
+ff_version() { git show "$1:surfer.json" | /usr/bin/python3 -I -c 'import json,sys; print(json.load(sys.stdin)["version"]["version"])'; }
+old_ff=$(ff_version "$old")
+
+if [ "$tag" = "$old_tag" ]; then
+  echo "upstream already holds Zen $tag (Firefox $old_ff)"
+  new=$old
+  new_ff=$old_ff
+else
+  echo "fetching Zen $tag"
+  git fetch -q --depth 1 --no-tags "$ZEN" "refs/tags/$tag" || die "fetch of tag $tag failed"
+  zen_commit=$(git rev-parse 'FETCH_HEAD^{commit}')
+  new_ff=$(ff_version "$zen_commit")
+fi
+
+echo "Zen $old_tag -> $tag"
+echo "Firefox $old_ff -> $new_ff"
+if [ "$old_ff" != "$new_ff" ]; then
+  echo "The Firefox version changed. Check https://www.mozilla.org/security/advisories/ for fixes in Firefox $new_ff. If it has any, release within 3 days."
+fi
+
+# Is anything under .github in this path one that Zen ships (and so must stay deleted)?
+zen_tree=${zen_commit:-$new}
+is_zen_github() { case "$1" in .github/*) git cat-file -e "$zen_tree:$1" 2>/dev/null || git cat-file -e "$old:$1" 2>/dev/null ;; *) return 1 ;; esac; }
+
+if [ "$dry_run" = 1 ]; then
+  base=$(git merge-base "$old" main)
+  if [ "$tag" = "$old_tag" ] && git merge-base --is-ancestor "$old" main; then
+    echo "main already contains upstream. Nothing to rebase."
+    exit 0
+  fi
+  # merge-tree replays the whole of main at once. A commit-by-commit rebase can stop on a few
+  # more files, but the set is usually the same.
+  set +e
+  out=$(git merge-tree --write-tree --name-only --no-messages --merge-base "$base" "$zen_tree" main)
+  rc=$?
+  set -e
+  [ $rc -le 1 ] || die "git merge-tree failed"
+  auto=; manual=
+  # Output: the tree id, then one conflicted path per line.
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    if is_zen_github "$p" || ! git cat-file -e "main:$p" 2>/dev/null; then
+      auto="$auto  $p
+"
+    else
+      manual="$manual  $p
+"
+    fi
+  done <<EOF
+$(printf '%s\n' "$out" | sed 1d | sort -u)
+EOF
+  echo "Expected conflicts that resolve automatically (Origin deleted the file):"
+  printf '%s' "${auto:-  none
+}"
+  echo "Expected conflicts that need a person:"
+  printf '%s' "${manual:-  none
+}"
+  added=$(git diff --name-only --diff-filter=A "$old" "$zen_tree" -- .github)
+  if [ -n "$added" ]; then
+    echo "New Zen files under .github that the sync will delete:"
+    printf '  %s\n' $added
+  fi
+  echo "Dry run: no branch changed."
+  exit 0
+fi
+
+if [ "$tag" != "$old_tag" ]; then
+  msg="Zen $tag
+
+Tree of zen-browser/desktop tag $tag (commit $zen_commit), imported without history. Zen's full history is about 6 GB, so the upstream branch holds one snapshot commit per Zen release."
+  new=$(git commit-tree "$zen_commit^{tree}" -p "$old" -m "$msg")
+  git update-ref -m "sync-upstream: Zen $tag" refs/heads/upstream "$new" "$old"
+  echo "upstream: $(git log -1 --format='%h %s' "$new") (previous: $(git rev-parse --short "$old"))"
+fi
+
+abort_help() {
+  echo
+  echo "To keep going: fix the files above, git add them (or git rm), then run"
+  echo "  scripts/sync-upstream --continue"
+  echo "To give up and restore main and upstream as they were:"
+  echo "  git rebase --abort"
+  if [ "$new" != "$old" ]; then
+    echo "  git update-ref refs/heads/upstream $old $new"
+  else
+    echo "and, only if this sync added Zen $old_tag to upstream:"
+    echo "  git update-ref refs/heads/upstream $old^ $old"
+  fi
+  return 0
+}
+
+# Resolve what we may, then continue, until the rebase finishes or stops on a real conflict.
+resolve_loop() {
+  while in_rebase; do
+    manual=
+    # Porcelain status during a rebase: X is the new base (upstream side), Y is Origin's commit.
+    while IFS= read -r line; do
+      xy=${line:0:2}; p=${line:3}
+      case "$xy" in DD|AU|UD|UA|DU|AA|UU) ;; *) continue ;; esac
+      if [ "$xy" = UD ] || [ "$xy" = DD ]; then
+        # Origin's commit deletes a file that Zen changed: it stays deleted.
+        git rm -q --cached -- "$p"; rm -f -- "$p"
+        echo "  kept deleted: $p"
+      elif is_zen_github "$p"; then
+        git rm -q --cached -- "$p"; rm -f -- "$p"
+        echo "  kept deleted (.github): $p"
+      else
+        manual="$manual $xy $p
+"
+      fi
+    done <<EOF
+$(git status --porcelain --untracked-files=no)
+EOF
+    if [ -n "$manual" ]; then
+      echo
+      echo "Rebase stopped at $(git rev-parse --short REBASE_HEAD 2>/dev/null) $(git log -1 --format=%s REBASE_HEAD 2>/dev/null)"
+      echo "Conflicts that need a person (status, path):"
+      printf '%s' "$manual" | sed 's/^ */  /'
+      abort_help
+      exit 1
+    fi
+    if git diff --cached --quiet; then
+      out=$(git rebase --skip 2>&1) && rc=0 || rc=$?
+    else
+      out=$(GIT_EDITOR=true git rebase --continue 2>&1) && rc=0 || rc=$?
+    fi
+    # A non-zero status with the rebase still running means a new conflict: loop again.
+    if [ $rc -ne 0 ] && ! in_rebase; then
+      printf '%s\n' "$out" >&2
+      die "git rebase failed"
+    fi
+  done
+}
+
+if [ "$cont" = 1 ]; then
+  resolve_loop
+  echo "main: $(git rev-list --count upstream..main) Origin commits on Zen $tag"
+elif git merge-base --is-ancestor "$new" main; then
+  echo "main already contains upstream. Nothing to rebase."
+else
+  base=$(git merge-base "$old" main)
+  echo "rebasing main: git rebase --onto upstream $(git rev-parse --short "$base") main"
+  if ! out=$(git rebase --onto upstream "$base" main 2>&1); then
+    in_rebase || { printf '%s\n' "$out" >&2; die "git rebase failed"; }
+  fi
+  resolve_loop
+  echo "main: $(git rev-list --count upstream..main) Origin commits on Zen $tag"
+fi
+
+# Zen may add new workflows that apply cleanly. Their schedules would run in our public repo.
+git checkout -q main
+added=$(git ls-tree -r --name-only main -- .github | while IFS= read -r p; do is_zen_github "$p" && echo "$p"; done || true)
+if [ -n "$added" ]; then
+  printf '%s\n' "$added" | while IFS= read -r p; do git rm -q -- "$p"; done
+  git commit -q -m "Remove Zen's GitHub files added in $tag" -m "Zen's workflows would run on their schedules in our public repo."
+  echo "removed Zen's .github files:"
+  printf '  %s\n' $added
+fi
+
+echo
+echo "Done. main is on Zen $tag (Firefox $new_ff). Next steps, none of them run by this script:"
+echo "1. Build: scripts/detach build-origin scripts/perf/hold scripts/build-origin"
+echo "2. Run the smoke test and a measurement batch with scripts/perf (see docs/benchmarks.md)."
+echo "3. Release: push main, tag it and publish the build on github.com/Sowyu/Origin."
+echo "upstream stays local, so do not push it."
