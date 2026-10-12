@@ -13,13 +13,6 @@ XPCOMUtils.defineLazyPreferenceGetter(
   2
 );
 
-XPCOMUtils.defineLazyPreferenceGetter(
-  lazy,
-  "libraryEnabled",
-  "zen.library.enabled",
-  true
-);
-
 ChromeUtils.defineLazyGetter(lazy, "l10n", () => {
   return new Localization(["browser/zen-command-palette.ftl"], true);
 });
@@ -43,14 +36,6 @@ const globalActionsTemplate = [
     l10nId: "zen-action-open-theme-picker",
     command: "cmd_zenOpenZenThemePicker",
     icon: "chrome://browser/skin/zen-icons/paintbrush-fill.svg",
-  },
-  {
-    l10nId: "zen-action-open-library",
-    command: "cmd_zenToggleLibrary",
-    icon: "chrome://browser/skin/zen-icons/library.svg",
-    isAvailable: () => {
-      return lazy.libraryEnabled;
-    },
   },
   {
     l10nId: "zen-action-new-split-view",
@@ -136,54 +121,6 @@ const globalActionsTemplate = [
     isAvailable: window => {
       const tab = window.gBrowser.selectedTab;
       return !tab.hasAttribute("zen-empty-tab") && tab.pinned;
-    },
-  },
-  {
-    l10nId: "zen-action-open-space-routing",
-    command: "cmd_zenOpenSpaceRoutingSettings",
-    icon: "chrome://browser/skin/zen-icons/selectable/airplane.svg",
-  },
-  {
-    l10nId: "zen-action-new-boost",
-    icon: "chrome://browser/skin/zen-icons/boost.svg",
-    isAvailable: window => {
-      if (!isNotEmptyTab(window)) {
-        return false;
-      }
-
-      // Keep this action consistent with the rest of the Boosts UI.
-      if (!Services.prefs.getBoolPref("zen.boosts.enabled", false)) {
-        return false;
-      }
-
-      const uri = window.gBrowser.currentURI;
-      return !!uri?.schemeIs && (uri.schemeIs("http") || uri.schemeIs("https"));
-    },
-    command: window => {
-      const uri = window.gBrowser.currentURI;
-      if (!uri?.schemeIs || !(uri.schemeIs("http") || uri.schemeIs("https"))) {
-        return;
-      }
-
-      let domain = "";
-      try {
-        domain = uri.host;
-      } catch {
-        return;
-      }
-
-      if (!domain) {
-        return;
-      }
-
-      const { gZenBoostsManager } = ChromeUtils.importESModule(
-        "resource:///modules/zen/boosts/ZenBoostsManager.sys.mjs"
-      );
-      const boost = gZenBoostsManager.createNewBoost(domain);
-      if (!boost) {
-        return;
-      }
-      gZenBoostsManager.openBoostWindow(window, boost, uri);
     },
   },
   {

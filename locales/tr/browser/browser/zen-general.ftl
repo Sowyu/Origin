@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Düzenle…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Etiketi değiştir…
 tab-context-zen-edit-icon = 
     .label = Simgeyi değiştir…
-zen-themes-corrupted = { -brand-short-name } adlı modun dosyaları hatalı. Varsayılan temaya sıfırlandılar.
 zen-shortcuts-corrupted = { -brand-short-name } kısayol dosyanız bozuldu. Varsayılan kısayollara sıfırlandı.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Uzantı ekle
 zen-site-data-site-settings = 
     .label = Tüm site ayarları
-zen-site-data-header-share = 
-    .tooltiptext = Bu sayfayı paylaş
 zen-site-data-header-reader-mode = 
     .tooltiptext = Okuyucu moduna gir
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = İzleme koruması
 
 zen-site-data-panel-feature-callout-title = Eklentiler, izinler ve daha fazlası için yeni bir alan
 zen-site-data-panel-feature-callout-subtitle = Site ayarlarını yönetmek, güvenlik bilgilerini görüntülemek, uzantılara erişmek ve yaygın işlemleri gerçekleştirmek için simgeye tıklayın.
-zen-open-link-in-glance = 
-    .label = Bağlantıyı hızlı görünümde aç
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Güncelleme tamamlandı!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = { -brand-short-name }'de neler yeni
-zen-sidebar-notification-updated-tooltip = 
-    .title = Sürüm Notlarını Görüntüle
-zen-sidebar-notification-donate-label = { -brand-short-name } uygulamasını destekle
-zen-sidebar-notification-donate-tooltip = 
-    .title = Projeye bağış yap
-zen-sidebar-notification-restart-safe-mode-label = Bir sorun mu oluştu?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Güvenli Modda Yeniden Başlat
 zen-window-sync-migration-dialog-title = Pencerelerinizi Senkronize Tutun
 zen-window-sync-migration-dialog-message = Zen artık aynı cihazdaki pencereleri senkronize ediyor; böylece bir pencerede yapılan değişiklikler anında diğer pencerelere yansıyor.
 zen-window-sync-migration-dialog-learn-more = Daha fazla bilgi

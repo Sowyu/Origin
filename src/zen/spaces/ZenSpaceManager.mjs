@@ -13,12 +13,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
   ZenSessionStore: "resource:///modules/zen/ZenSessionManager.sys.mjs",
 });
 
-ChromeUtils.defineESModuleGetters(
-  lazy,
-  { ZenLibrary: "moz-src:///zen/library/ZenLibrary.mjs" },
-  { global: "current" }
-);
-
 ChromeUtils.defineLazyGetter(lazy, "graphemes", () => new Intl.Segmenter());
 
 ChromeUtils.defineLazyGetter(lazy, "browserBackgroundElement", () => {
@@ -67,14 +61,6 @@ class nsZenWorkspaces {
     promise: null,
     animations: [],
   };
-
-  bookmarkMenus = [
-    "PlacesToolbar",
-    "bookmarks-menu-button",
-    "BMB_bookmarksToolbar",
-    "BMB_unsortedBookmarks",
-    "BMB_mobileBookmarks",
-  ];
 
   promisePinnedInitialized = new Promise(resolve => {
     this._resolvePinnedInitialized = resolve;
@@ -167,12 +153,6 @@ class nsZenWorkspaces {
     }
 
     if (!this.privateWindowOrDisabled) {
-      const observerFunction = async () => {
-        delete this._workspaceBookmarksCache;
-        await this.#initializeWorkspaceBookmarks();
-        this._invalidateBookmarkContainers();
-      };
-      Services.obs.addObserver(observerFunction, "workspace-bookmarks-updated");
       const onContainerDeleted = subject => {
         const userContextId = subject?.wrappedJSObject?.userContextId;
         for (const workspace of this.getWorkspaces()) {
@@ -187,10 +167,6 @@ class nsZenWorkspaces {
         "contextual-identity-deleted"
       );
       window.addEventListener("unload", () => {
-        Services.obs.removeObserver(
-          observerFunction,
-          "workspace-bookmarks-updated"
-        );
         Services.obs.removeObserver(
           onContainerDeleted,
           "contextual-identity-deleted"
@@ -760,27 +736,6 @@ class nsZenWorkspaces {
     return spacesForSS;
   }
 
-  async #initializeWorkspaceBookmarks() {
-    if (this.privateWindowOrDisabled) {
-      this._workspaceBookmarksCache = {
-        bookmarks: [],
-        lastChangeTimestamp: 0,
-      };
-      return;
-    }
-
-    if (this._workspaceBookmarksCache) {
-      return;
-    }
-
-    const [bookmarks, lastChangeTimestamp] = await Promise.all([
-      ZenWorkspaceBookmarksStorage.getBookmarkGuidsByWorkspace(),
-      ZenWorkspaceBookmarksStorage.getLastChangeTimestamp(),
-    ]);
-
-    this._workspaceBookmarksCache = { bookmarks, lastChangeTimestamp };
-  }
-
   restoreWorkspacesFromSessionStore(aWinData = {}) {
     if (this.#hasInitialized || !this.workspaceEnabled) {
       this._resolveInitialized?.();
@@ -858,7 +813,6 @@ class nsZenWorkspaces {
     }
     this.#initializeEmptyTab();
     this.#afterLoadInit();
-    await this.#initializeWorkspaceBookmarks();
     await this.changeWorkspace(activeWorkspace, { onInit: true });
     this.#fixTabPositions();
     this.onWindowResize();
@@ -973,9 +927,7 @@ class nsZenWorkspaces {
         tabs[this._tabToSelect] !== this._tabToRemoveForEmpty
       ) {
         this.log(`Found tab to select: ${this._tabToSelect}, ${tabs.length}`);
-        let tabToUse = gZenGlanceManager.getTabOrGlanceParent(
-          tabs[this._tabToSelect] || this._emptyTab
-        );
+        let tabToUse = tabs[this._tabToSelect] || this._emptyTab;
         gBrowser.selectedTab = tabToUse;
         this._removedByStartupPage = true;
         gBrowser.removeTab(this._tabToRemoveForEmpty, {
@@ -1014,11 +966,7 @@ class nsZenWorkspaces {
     // Wait for the next event loop to ensure that the startup focus logic by
     // firefox has finished doing it's thing.
     const focusTimer = setTimeout(() => {
-      if (
-        window.closed ||
-        !window.docShell ||
-        document.documentElement.hasAttribute("zen-welcome-stage")
-      ) {
+      if (window.closed || !window.docShell) {
         return;
       }
       if (gZenVerticalTabsManager._canReplaceNewTab && shownEmptyTab) {
@@ -1148,14 +1096,6 @@ class nsZenWorkspaces {
       this.__contextIsDelete ||
       this._removedByStartupPage
     ) {
-      return null;
-    }
-
-    // Closing a glance tab tears down the overlay and restores selection
-    // to its parent tab. Don't run the last-tab handling here:
-    // in a pinned-only window the glance child is the only unpinned tab,
-    // so this would switch to an empty tab and clobber the restore-to-parent.
-    if (tab.hasAttribute("glance-id")) {
       return null;
     }
 
@@ -1755,11 +1695,6 @@ class nsZenWorkspaces {
           // the current workspace
           delete this.lastSelectedWorkspaceTabs[previousWorkspaceID];
         }
-      }
-      // also change glance tab if it's the same tab
-      const glanceTab = tab.querySelector(".tabbrowser-tab[zen-glance-tab]");
-      if (glanceTab) {
-        glanceTab.setAttribute("zen-workspace-id", workspaceID);
       }
     }
     gBrowser.tabContainer._invalidateCachedTabs();
@@ -2429,8 +2364,7 @@ class nsZenWorkspaces {
       !aTab.hasAttribute("zen-empty-tab") &&
       !aTab.hasAttribute("zen-essential")
     ) {
-      this.lastSelectedWorkspaceTabs[tabSpace] =
-        gZenGlanceManager.getTabOrGlanceParent(aTab);
+      this.lastSelectedWorkspaceTabs[tabSpace] = aTab;
       this.changeWorkspaceWithID(tabSpace);
       return true;
     }
@@ -2441,10 +2375,6 @@ class nsZenWorkspaces {
     const isEssential = tab.getAttribute("zen-essential") === "true";
     const tabWorkspaceId = tab.getAttribute("zen-workspace-id");
     const tabContextId = tab.getAttribute("usercontextid") ?? "0";
-
-    if (tab.hasAttribute("zen-glance-tab")) {
-      return true; // Always show glance tabs
-    }
 
     // See https://github.com/zen-browser/desktop/issues/10666, we should never
     // show closing tabs and consider them as not part of any workspace. This will
@@ -2495,8 +2425,7 @@ class nsZenWorkspaces {
 
     // Save current tab as last selected for old workspace if it shouldn't be visible in new workspace
     if (oldWorkspaceId && oldWorkspaceId !== workspace.uuid) {
-      this.lastSelectedWorkspaceTabs[oldWorkspaceId] =
-        gZenGlanceManager.getTabOrGlanceParent(currentSelectedTab);
+      this.lastSelectedWorkspaceTabs[oldWorkspaceId] = currentSelectedTab;
     }
 
     let tabToSelect = null;
@@ -2585,15 +2514,6 @@ class nsZenWorkspaces {
       }
     }
 
-    // Avoid forcing a startup toolbar rebuild when there are no
-    // workspace-specific bookmark assignments to apply.
-    const hasWorkspaceBookmarks = !!Object.keys(
-      this._workspaceBookmarksCache?.bookmarks || {}
-    ).length;
-    if (!onInit || hasWorkspaceBookmarks) {
-      this._invalidateBookmarkContainers();
-    }
-
     // Update workspace indicator
     await this.updateWorkspaceIndicator(workspace, this.workspaceIndicator);
 
@@ -2632,17 +2552,6 @@ class nsZenWorkspaces {
   async #fixCtrlTabBehavior() {
     ctrlTab.uninit();
     ctrlTab.readPref();
-  }
-
-  _invalidateBookmarkContainers() {
-    for (let i = 0, len = this.bookmarkMenus.length; i < len; i++) {
-      const element = document.getElementById(this.bookmarkMenus[i]);
-      if (element && element._placesView) {
-        const placesView = element._placesView;
-        placesView.invalidateContainer(placesView._resultNode);
-      }
-    }
-    BookmarkingUI.updateEmptyToolbarMessage();
   }
 
   updateWorkspacesChangeContextMenu() {
@@ -2861,17 +2770,6 @@ class nsZenWorkspaces {
     if (shouldHideSeparator) {
       pinnedContainer.setAttribute("hide-separator", "true");
     } else {
-      const workspaceID = pinnedContainer.getAttribute("zen-workspace-id");
-      const tabs = this.#unpinnedTabsInWorkspace(workspaceID);
-      const closableTabs = this.#getClosableTabs(tabs);
-      const button = pinnedContainer.querySelector(
-        ".zen-workspace-close-unpinned-tabs-button"
-      );
-      if (tabs.length === closableTabs.length) {
-        button.setAttribute("can-close", "true");
-      } else {
-        button.removeAttribute("can-close");
-      }
       pinnedContainer.removeAttribute("hide-separator");
     }
   }
@@ -2879,7 +2777,6 @@ class nsZenWorkspaces {
   onPinnedTabsResize(entries, forAnimation = false) {
     if (
       document.documentElement.hasAttribute("inDOMFullscreen") ||
-      lazy.ZenLibrary.isLibrarySlightlyOpen ||
       !this._hasInitializedTabsStrip ||
       (this._organizingWorkspaceStrip && !forAnimation) ||
       document.documentElement.hasAttribute("zen-creating-workspace") ||
@@ -2972,8 +2869,7 @@ class nsZenWorkspaces {
         tab.hasAttribute("change-workspace") &&
         this.moveTabToWorkspace(tab, workspaceID)
       ) {
-        this.lastSelectedWorkspaceTabs[workspaceID] =
-          gZenGlanceManager.getTabOrGlanceParent(tab);
+        this.lastSelectedWorkspaceTabs[workspaceID] = tab;
         tab.removeAttribute("change-workspace");
         const workspace = this.getWorkspaceFromId(workspaceID);
         setTimeout(() => {
@@ -3016,11 +2912,6 @@ class nsZenWorkspaces {
       return;
     }
 
-    if (tab.hasAttribute("zen-glance-tab")) {
-      // Extract from parent node so we are not selecting the wrong (current) tab
-      tab = tab.parentNode.closest(".tabbrowser-tab");
-      console.assert(tab, "Tab not found for zen-glance-tab");
-    }
     const workspaceID = tab.getAttribute("zen-workspace-id");
     const isEssential = tab.getAttribute("zen-essential") === "true";
     if (tab.hasAttribute("zen-empty-tab")) {
@@ -3035,8 +2926,7 @@ class nsZenWorkspaces {
 
       // Only update last selected tab for non-essential tabs in their workspace
       if (workspaceID === activeWorkspace.uuid) {
-        this.lastSelectedWorkspaceTabs[workspaceID] =
-          gZenGlanceManager.getTabOrGlanceParent(tab);
+        this.lastSelectedWorkspaceTabs[workspaceID] = tab;
       }
 
       // Switch workspace if needed
@@ -3090,12 +2980,6 @@ class nsZenWorkspaces {
         shortcut: restoreClosedTabsShortcut,
       },
     });
-  }
-
-  contextShareWorkspace() {
-    const workspaceId =
-      this.#contextMenuData?.workspaceId || this.activeWorkspace;
-    gZenShareManager.shareSpace(workspaceId);
   }
 
   async contextDeleteWorkspace() {
@@ -3170,8 +3054,7 @@ class nsZenWorkspaces {
     document.getElementById("tabContextMenu").hidePopup();
     this.moveTabsToWorkspace(tabs, workspaceID);
     // Make sure we select the last tab in the new workspace
-    this.lastSelectedWorkspaceTabs[workspaceID] =
-      gZenGlanceManager.getTabOrGlanceParent(tabs[tabs.length - 1]);
+    this.lastSelectedWorkspaceTabs[workspaceID] = tabs[tabs.length - 1];
     const workspaces = this.getWorkspaces();
     await this.changeWorkspace(
       workspaces.find(workspace => workspace.uuid === workspaceID)
@@ -3250,31 +3133,6 @@ class nsZenWorkspaces {
     await this.changeWorkspace(workspaceToSwitch);
   }
 
-  isBookmarkInAnotherWorkspace(bookmark) {
-    if (!this._workspaceBookmarksCache?.bookmarks) {
-      return false;
-    }
-    const bookmarkGuid = bookmark.bookmarkGuid;
-    const activeWorkspaceUuid = this.activeWorkspace;
-    let isInActiveWorkspace = false;
-    let isInOtherWorkspace = false;
-
-    for (const [workspaceUuid, bookmarkGuids] of Object.entries(
-      this._workspaceBookmarksCache.bookmarks
-    )) {
-      if (bookmarkGuids.includes(bookmarkGuid)) {
-        if (workspaceUuid === activeWorkspaceUuid) {
-          isInActiveWorkspace = true;
-        } else {
-          isInOtherWorkspace = true;
-        }
-      }
-    }
-
-    // Return true only if the bookmark is in another workspace and not in the active one
-    return isInOtherWorkspace && !isInActiveWorkspace;
-  }
-
   // Session restore functions
   get allStoredTabs() {
     if (this._allStoredTabs) {
@@ -3319,17 +3177,9 @@ class nsZenWorkspaces {
       for (const tab of container.children) {
         if (gBrowser.isTab(tab)) {
           tabs.push(tab);
-          const glance = tab.querySelector(".tabbrowser-tab[glance-id]");
-          if (glance) {
-            tabs.push(glance);
-          }
         } else if (gBrowser.isTabGroup(tab)) {
           for (const groupTab of tab.tabs) {
             tabs.push(groupTab);
-            const glance = groupTab.querySelector(".tabbrowser-tab[glance-id]");
-            if (glance) {
-              tabs.push(glance);
-            }
           }
         }
       }
@@ -3380,16 +3230,6 @@ class nsZenWorkspaces {
 
   get pinnedTabCount() {
     return this.pinnedTabsContainer.children.length - 1;
-  }
-
-  reorganizeTabsAfterWelcome() {
-    const children = gBrowser.tabContainer.arrowScrollbox.children;
-    const remainingTabs = Array.from(children).filter(child =>
-      gBrowser.isTab(child)
-    );
-    for (const tab of remainingTabs) {
-      this.moveTabToWorkspace(tab, this.activeWorkspace);
-    }
   }
 
   async switchIfNeeded(browser) {
@@ -3455,8 +3295,7 @@ class nsZenWorkspaces {
 
         this._workspaceChangeInProgress = true;
         try {
-          this.lastSelectedWorkspaceTabs[workspaceToSwitch.uuid] =
-            gZenGlanceManager.getTabOrGlanceParent(tab);
+          this.lastSelectedWorkspaceTabs[workspaceToSwitch.uuid] = tab;
           await this.changeWorkspace(workspaceToSwitch);
         } finally {
           this._workspaceChangeInProgress = false;

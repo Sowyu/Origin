@@ -68,7 +68,6 @@
     #maxTabsPerRow = 0;
     #changeSpaceTimer = null;
     #isAnimatingTabMove = false;
-    #firstHapticFeedbackPlayed = false;
     #dragImageEssential = false;
 
     #dragOverSplit = {};
@@ -912,7 +911,6 @@
         !dropElement ||
         !isTab(dropElement) ||
         dropElement.hasAttribute("zen-essential") ||
-        dropElement.hasAttribute("zen-glance-tab") ||
         dropElement?.group?.hasAttribute("split-view-group") ||
         movingTabsSet.size > 1
       ) {
@@ -923,9 +921,7 @@
       if (
         movingTabsSet.has(this._targetForDrop(dropElement)) ||
         !isTab(draggedTab) ||
-        draggedTab?.group?.hasAttribute("split-view-group") ||
-        draggedTab.hasAttribute("zen-live-folder-item-id") ||
-        dropElement.hasAttribute("zen-live-folder-item-id")
+        draggedTab?.group?.hasAttribute("split-view-group")
       ) {
         this._clearDragOverSplit();
         return;
@@ -1446,7 +1442,6 @@
       this.#maybeClearVerticalPinnedGridDragOver();
       thisFromGlobal.originalDragImageArgs = [];
       thisFromGlobal._dropLandingArmed = false;
-      this.#firstHapticFeedbackPlayed = false;
       window.removeEventListener(
         "dragenter",
         thisFromGlobal.handle_windowDragEnter,
@@ -1513,27 +1508,6 @@
       gZenPinnedTabManager.removeTabContainersDragoverClass();
     }
 
-    #canDropIntoFolder(dropElement, draggedTab) {
-      let folder = dropElement?.classList.contains("tab-group-label-container")
-        ? dropElement.parentElement
-        : dropElement?.group;
-      if (!folder?.isZenFolder) {
-        return true;
-      }
-      if (folder.isLiveFolder) {
-        const liveFolderItemId = draggedTab.getAttribute(
-          "zen-live-folder-item-id"
-        );
-        if (
-          !liveFolderItemId ||
-          !liveFolderItemId.startsWith(`${folder.id}:`)
-        ) {
-          return false;
-        }
-      }
-      return true;
-    }
-
     _moveTogetherSelectedTabs() {
       // Override the default behavior of only moving together selected tabs.
     }
@@ -1546,7 +1520,6 @@
       }
       const separation = 4;
       const dropZoneSelector = ":is(.zen-drop-target)";
-      let shouldPlayHapticFeedback = false;
       let showIndicatorUnderNewTabButton = false;
       let dropBefore = false;
       let dropElementFromEvent = event.target.closest(dropZoneSelector);
@@ -1583,7 +1556,6 @@
       dropElement = elementToMove(dropElement);
       this.#maybeClearVerticalPinnedGridDragOver();
       if (this.#lastDropTarget !== dropElement) {
-        shouldPlayHapticFeedback = this.#lastDropTarget !== null;
         this.#removeDragOverBackground();
       }
       if (!dropElement) {
@@ -1630,15 +1602,6 @@
             (possibleFolderElement.collapsed ||
               possibleFolderElement.childGroupsAndTabs.length < 2)));
       if (
-        canHightlightGroup &&
-        !dropIntoFolder &&
-        !this.#canDropIntoFolder(dropElement, draggedTab)
-      ) {
-        this.clearDragOverVisuals();
-        dropElement = null;
-        return [dropElement, dropBefore];
-      }
-      if (
         isTabGroupLabel(draggedTab) &&
         draggedTab.group?.isZenFolder &&
         (((isTab(dropElement) ||
@@ -1664,9 +1627,6 @@
         dropBefore =
           !showIndicatorUnderNewTabButton && this._dropsBefore(event, rect);
         const top = Math.round(dropBefore ? rect.top : rect.top + rect.height);
-        if (gZenPinnedTabManager.dragIndicator.style.top !== `${top}px`) {
-          shouldPlayHapticFeedback = true;
-        }
         this._placeDropIndicator({
           left: rect.left + separation / 2,
           width: rect.width - separation,
@@ -1680,9 +1640,7 @@
         dropElement.classList.contains("zen-drop-target") &&
         canHightlightGroup
       ) {
-        shouldPlayHapticFeedback =
-          this.#applyDragOverBackground(dropElement) &&
-          !gZenPinnedTabManager._dragIndicator;
+        this.#applyDragOverBackground(dropElement);
         gZenPinnedTabManager.removeTabContainersDragoverClass();
         dropElement = dropElement.parentElement?.labelElement || dropElement;
         if (dropElement.classList.contains("zen-current-workspace-indicator")) {
@@ -1694,16 +1652,6 @@
             ) || dropElement;
           dropBefore = true;
         }
-      }
-      if (shouldPlayHapticFeedback && !this.#firstHapticFeedbackPlayed) {
-        // The first haptic feedback can often be too annoying,
-        // so we skip it, but play for subsequent dragovers.
-        this.#firstHapticFeedbackPlayed = true;
-        shouldPlayHapticFeedback = false;
-      }
-      if (shouldPlayHapticFeedback) {
-        // eslint-disable-next-line mozilla/valid-services
-        Services.zen.playHapticFeedback();
       }
       return [dropBefore, dropElement];
     }
@@ -1989,9 +1937,6 @@
       if (newIndex == dragData.animDropElementIndex) {
         return;
       }
-
-      // eslint-disable-next-line mozilla/valid-services
-      Services.zen.playHapticFeedback();
 
       dragData.animDropElementIndex = newIndex;
       dragData.dropElement = tabs[Math.min(newIndex, tabs.length - 1)];

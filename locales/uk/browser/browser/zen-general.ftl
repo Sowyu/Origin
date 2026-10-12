@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Змінити мітку...
 tab-context-zen-edit-icon = 
     .label = Змінити значок...
-zen-themes-corrupted = Ваш файл модифікацій { -brand-short-name } пошкоджено. Вони були скинуті до типової теми.
 zen-shortcuts-corrupted = Ваш файл { -brand-short-name } комбінацій пошкоджено. Їх було скинуто до типових комбінацій.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Додати розширення
 zen-site-data-site-settings = 
     .label = Усі налаштування сайту
-zen-site-data-header-share = 
-    .tooltiptext = Поділитися цією сторінкою
 zen-site-data-header-reader-mode = 
     .tooltiptext = Увійти у режим читання
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = Захист від відстеженн
 
 zen-site-data-panel-feature-callout-title = Новий дім для доповнень, дозволів тощо
 zen-site-data-panel-feature-callout-subtitle = Натисніть значок, щоби керувати налаштуваннями сайту, переглядати інформацію про безпеку, отримувати доступ до розширень і виконувати поширені дії.
-zen-open-link-in-glance = 
-    .label = Відкрити посилання в передперегляді
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Оновлення завершено!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Що нового в { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Переглянути примітки до випуску
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = Щось зламалося?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Перезапустити в безпечному режимі
 zen-window-sync-migration-dialog-title = Тримати ваші вікна синхронізованими
 zen-window-sync-migration-dialog-message = Zen тепер синхронізує вікна на одному пристрої, тому зміни в одному вікні миттєво показуватимуться в інших.
 zen-window-sync-migration-dialog-learn-more = Дізнатися більше

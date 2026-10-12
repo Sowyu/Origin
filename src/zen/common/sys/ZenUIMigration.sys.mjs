@@ -9,8 +9,6 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   CustomizableUI:
     "moz-src:///browser/components/customizableui/CustomizableUI.sys.mjs",
-  SessionStore:
-    "moz-src:///browser/components/sessionstore/SessionStore.sys.mjs",
 });
 
 class nsZenUIMigration {
@@ -25,7 +23,7 @@ class nsZenUIMigration {
         console.error("ZenUIMigration: Error during migration", e);
       }
     }
-    this.#migrateLibraryButton();
+    this.#restoreDownloadsButton();
     this.clearVariables();
     if (this.shouldRestart) {
       Services.startup.quit(
@@ -54,37 +52,36 @@ class nsZenUIMigration {
     this._migrationVersion = this.MIGRATION_VERSION;
   }
 
-  #migrateLibraryButton() {
+  // Zen swapped the downloads button for its Library button in the sidebar
+  // footer and set this pref. Origin has no Library, so a copied Zen profile
+  // gets the downloads button back where the Library button was.
+  #restoreDownloadsButton() {
     const donePref = "zen.library.migrated-downloads-button";
-    if (
-      !Services.prefs.getBoolPref("zen.library.enabled", false) ||
-      Services.prefs.getBoolPref(donePref, false)
-    ) {
+    if (!Services.prefs.getBoolPref(donePref, false)) {
       return;
     }
-    // A toolbar's saved placements are only there once a window has it.
-    const footButtons = "zen-sidebar-foot-buttons";
     const listener = {
       onAreaNodeRegistered: area => {
-        if (area !== footButtons) {
+        if (area !== "zen-sidebar-foot-buttons") {
           return;
         }
         lazy.CustomizableUI.removeListener(listener);
-        Services.prefs.setBoolPref(donePref, true);
-        if (lazy.CustomizableUI.getPlacementOfWidget("zen-library-button")) {
+        Services.prefs.clearUserPref(donePref);
+        const library = lazy.CustomizableUI.getPlacementOfWidget(
+          "zen-library-button",
+          false
+        );
+        if (
+          library?.area !== area ||
+          lazy.CustomizableUI.getPlacementOfWidget("downloads-button")
+        ) {
           return;
         }
-        const downloads =
-          lazy.CustomizableUI.getPlacementOfWidget("downloads-button");
-        const standsIn = downloads?.area === footButtons;
         lazy.CustomizableUI.addWidgetToArea(
-          "zen-library-button",
-          footButtons,
-          standsIn ? downloads.position : 0
+          "downloads-button",
+          area,
+          library.position
         );
-        if (standsIn) {
-          lazy.CustomizableUI.removeWidgetFromArea("downloads-button");
-        }
       },
     };
     lazy.CustomizableUI.addListener(listener);
@@ -151,44 +148,6 @@ class nsZenUIMigration {
 
   _migrateV5() {
     Services.prefs.setBoolPref("zen.site-data-panel.show-callout", true);
-  }
-
-  _migrateV6() {
-    lazy.SessionStore.promiseAllWindowsRestored.then(() => {
-      const win = Services.wm.getMostRecentWindow("navigator:browser");
-      win.setTimeout(async () => {
-        const [title, message, learnMore, accept] =
-          await win.document.l10n.formatMessages([
-            "zen-window-sync-migration-dialog-title",
-            "zen-window-sync-migration-dialog-message",
-            "zen-window-sync-migration-dialog-learn-more",
-            "zen-window-sync-migration-dialog-accept",
-          ]);
-
-        // buttonPressed will be 0 for cancel, 1 for "more info"
-        let buttonPressed = Services.prompt.confirmEx(
-          win,
-          title.value,
-          message.value,
-          Services.prompt.BUTTON_POS_0 *
-            Services.prompt.BUTTON_TITLE_IS_STRING +
-            Services.prompt.BUTTON_POS_1 *
-              Services.prompt.BUTTON_TITLE_IS_STRING,
-          learnMore.value,
-          accept.value,
-          null,
-          null,
-          {}
-        );
-        // User has clicked on "Learn More"
-        if (buttonPressed === 0) {
-          win.openTrustedLinkIn(
-            "https://docs.zen-browser.app/user-manual/window-sync",
-            "tab"
-          );
-        }
-      }, 1000);
-    });
   }
 
   _migrateV7() {

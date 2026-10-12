@@ -4,7 +4,6 @@
 
 zen-action-toggle-compact-mode = Toggle Compact Mode
 zen-action-open-theme-picker = Open Theme Picker
-zen-action-open-library = Open Library
 zen-action-new-split-view = New Split View
 zen-action-unsplit-view = Expand current view
 zen-action-new-space = New Space
@@ -18,8 +17,6 @@ zen-action-open-new-window = Open New Window
 zen-action-new-blank-window = New Blank Window
 zen-action-pin-tab = Pin Tab
 zen-action-unpin-tab = Unpin Tab
-zen-action-open-space-routing = Open Space Routing
-zen-action-new-boost = New Boost
 zen-action-next-space = Next Space
 zen-action-previous-space = Previous Space
 zen-action-close-tab = Close Tab

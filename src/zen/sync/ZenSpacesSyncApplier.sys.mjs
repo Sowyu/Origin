@@ -31,8 +31,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
   TabStateCache:
     "moz-src:///browser/components/sessionstore/TabStateCache.sys.mjs",
   ZenWindowSync: "resource:///modules/zen/ZenWindowSync.sys.mjs",
-  ZenLiveFoldersManager:
-    "resource:///modules/zen/ZenLiveFoldersManager.sys.mjs",
   ContextualIdentityService:
     "moz-src:///toolkit/components/contextualidentity/ContextualIdentityService.sys.mjs",
 });
@@ -451,18 +449,10 @@ class nsZenSpacesSyncApplier {
             label: data.name || "Folder",
             workspaceId:
               data.workspaceUuid || win.gZenWorkspaces.activeWorkspace,
-            isLiveFolder: !!data.live,
             collapsed: true,
           });
         } else if (data.name && folder.label !== data.name) {
           folder.label = data.name;
-        }
-
-        if (data.live && !folder.isLiveFolder) {
-          // The folder synced before its provider config was available and
-          // materialized as a plain folder; upgrade it so this profile
-          // projects the config too instead of clobbering it with live: null.
-          folder.isLiveFolder = true;
         }
 
         if ((folder.iconURL || null) !== (data.icon || null)) {
@@ -509,12 +499,6 @@ class nsZenSpacesSyncApplier {
           } else {
             folder.setAttribute("zen-workspace-id", data.workspaceUuid);
           }
-        }
-        if (data.live) {
-          await lazy.ZenLiveFoldersManager.adoptSyncedFolder(
-            folderId,
-            data.live
-          );
         }
       } catch (e) {
         fail(record, e);
@@ -571,7 +555,6 @@ class nsZenSpacesSyncApplier {
       noInitialLabel: true,
       lazyTabTitle: data.title || undefined,
       userContextId,
-      skipRoute: true,
     });
     // Setting the sync id before the queued TabOpen handler runs makes
     // window sync treat this tab as already replicated.

@@ -32,12 +32,9 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url =
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title =
-    .label = Change Label…
 tab-context-zen-edit-icon =
     .label = Change Icon…
 
-zen-themes-corrupted = Your { -brand-short-name } mods file is corrupted. They have been reset to the default theme.
 zen-shortcuts-corrupted = Your { -brand-short-name } shortcuts file is corrupted. They have been reset to the default shortcuts.
 
 # note: Do not translate the "<br/>" tags in the following string
@@ -122,8 +119,6 @@ zen-site-data-site-settings =
     .label = All Site Settings
 
 
-zen-site-data-header-share =
-    .tooltiptext = Share This Page
 zen-site-data-header-reader-mode =
     .tooltiptext = Enter Reader Mode
 zen-site-data-header-screenshot =
@@ -141,28 +136,8 @@ zen-site-data-setting-site-protection = Tracking Protection
 zen-site-data-panel-feature-callout-title = A new home for add-ons, permissions, and more
 zen-site-data-panel-feature-callout-subtitle = Click the icon to manage site settings, view security info, access extensions, and perform common actions.
 
-zen-open-link-in-glance =
-    .label = Open Link in Glance
-    .accesskey = G
-
-zen-sidebar-notification-updated-heading = Update Complete!
-
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = What's new in { -brand-short-name }
-zen-sidebar-notification-updated-tooltip =
-    .title = View Release Notes
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip =
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = Something broke?
-zen-sidebar-notification-restart-safe-mode-tooltip =
-    .title = Restart in Safe Mode
-
-zen-window-sync-migration-dialog-title = Keep Your Windows in Sync
-zen-window-sync-migration-dialog-message = Zen now syncs windows on the same device, so changes in one window are reflected across the others instantly.
-zen-window-sync-migration-dialog-learn-more = Learn More
-zen-window-sync-migration-dialog-accept = Got It
+# Shown in the About dialog.
+origin-about-based-on = { -brand-short-name } is based on Zen and Firefox and is not affiliated with either. <label data-l10n-name="origin-source-link">Source code</label>
 
 zen-appmenu-new-blank-window =
     .label = New Blank Window

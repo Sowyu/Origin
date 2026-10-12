@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Upravit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Změnit název...
 tab-context-zen-edit-icon = 
     .label = Změnit ikonu...
-zen-themes-corrupted = Váš { -brand-short-name } mods soubor je poškozen. Byl obnoven na výchozí motiv.
 zen-shortcuts-corrupted = Soubor se zkratky prohlížeče { -brand-short-name } je poškozen. Zkratky byly resetovány na výchozí nastavení.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Přidat rozšíření
 zen-site-data-site-settings = 
     .label = Nastavení všech stránek
-zen-site-data-header-share = 
-    .tooltiptext = Sdílet tuto stránku
 zen-site-data-header-reader-mode = 
     .tooltiptext = Zapnout čtecí režim
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = Ochrana proti sledování
 
 zen-site-data-panel-feature-callout-title = Nový domov pro doplňky, oprávnění a další
 zen-site-data-panel-feature-callout-subtitle = Klikněte na ikonu pro správu nastavení webu, zobrazení bezpečnostních informací, přístup k rozšíření a provádění běžných akcí.
-zen-open-link-in-glance = 
-    .label = Otevřít odkaz v Glance
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Aktualizace byla dokončena!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Co je nového v prohlížeči { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Zobrazit změny
-zen-sidebar-notification-donate-label = Podpořte { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Přispět na projekt
-zen-sidebar-notification-restart-safe-mode-label = Něco se rozbilo?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Restartovat v Nouzovém Režimu
 zen-window-sync-migration-dialog-title = Mějte svá okna synchronizovaná
 zen-window-sync-migration-dialog-message = Zen nyní synchronizuje okna na stejném zařízení. Změny provedené v jednom okně se okamžitě projeví v ostatních.
 zen-window-sync-migration-dialog-learn-more = Zjistit více

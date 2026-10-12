@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = ラベルを変更する...
 tab-context-zen-edit-icon = 
     .label = アイコンを変更する...
-zen-themes-corrupted = { -brand-short-name }モッドファイルが文字化けしています。デフォルトのテーマにリセットされました。
 zen-shortcuts-corrupted = { -brand-short-name }ショートカットファイルが文字化けしています。デフォルトのショートカットにリセットされました。
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = 拡張機能を追加
 zen-site-data-site-settings = 
     .label = すべてのサイト設定
-zen-site-data-header-share = 
-    .tooltiptext = このページをシェアする
 zen-site-data-header-reader-mode = 
     .tooltiptext = リーダーモードにする
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = トラッキング保護
 
 zen-site-data-panel-feature-callout-title = アドオン、権限などの新しいホーム
 zen-site-data-panel-feature-callout-subtitle = アイコンをクリックすると、サイト設定の管理、セキュリティ情報の表示、拡張機能へのアクセス、一般的なアクションが行えます。
-zen-open-link-in-glance = 
-    .label = Glanceでリンクを開く
-    .accesskey = G
-zen-sidebar-notification-updated-heading = アップデートが完了しました！
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = { -brand-short-name }の新機能
-zen-sidebar-notification-updated-tooltip = 
-    .title = リリースノートを表示する
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = 何か壊れましたか？
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = セーフモードで再起動する
 zen-window-sync-migration-dialog-title = Windowsとの同期を維持
 zen-window-sync-migration-dialog-message = Zenは同一デバイス内のウィンドウを同期するようになり、１つのウィンドウでの操作が、他のウィンドウに、即座に反映されます。
 zen-window-sync-migration-dialog-learn-more = もっと詳しく

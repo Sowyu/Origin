@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Αλλαγή Ετικέτας...
 tab-context-zen-edit-icon = 
     .label = Αλλαγή Εικονιδίου...
-zen-themes-corrupted = Το αρχείο { -brand-short-name } mods είναι κατεστραμμένο. Έχει γίνει επαναφορά στο προεπιλεγμένο θέμα.
 zen-shortcuts-corrupted = Το αρχείο συντομεύσεων σας { -brand-short-name } είναι κατεστραμμένο. Έχει γίνει επαναφορά στις προεπιλεγμένες συντομεύσεις.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Προσθήκη Επεκτάσεων
 zen-site-data-site-settings = 
     .label = Όλες Οι Ρυθμίσεις Ιστοσελίδας
-zen-site-data-header-share = 
-    .tooltiptext = Κοινοποίηση Αυτή Της Σελίδας
 zen-site-data-header-reader-mode = 
     .tooltiptext = Είσοδος Σε Λειτουργία Ανάγνωσης
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = Προστασία Ανίχνευσης
 
 zen-site-data-panel-feature-callout-title = Ένα νέο σπίτι για επεκτάσεις, άδειες, και άλλα
 zen-site-data-panel-feature-callout-subtitle = Κανε κλικ στο εικονίδιο για διαχείριση ρυθμίσεων ιστότοπων, εμφάνιση πληροφοριών ασφαλείας, πρόσβαση σε επεκτάσεις, και εκτέλεση συχνών ενεργειών.
-zen-open-link-in-glance = 
-    .label = Άνοιγμα συνδέσμου με ματιά
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Η Ενημέρωση Ολοκληρώθηκε!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Τι νέο υπάρχει στο { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Προβολή Σημειώσεων Έκδοσης
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = Χάλασε κάτι;
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Επανεκκίνηση σε Ασφαλή Λειτουργία
 zen-window-sync-migration-dialog-title = Κρατήστε τα παράθυρα σας συγχρονισμένα
 zen-window-sync-migration-dialog-message = Το Zen άρα στην ίδια συσκευή, άρα αλλαγές σε ένα παράθυρο τώρα αντικατροπτίζονται στα άλλα άμεσα.
 zen-window-sync-migration-dialog-learn-more = Περισσότερα

@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edita…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Canvia l'etiqueta...
 tab-context-zen-edit-icon = 
     .label = Canvia la icona...
-zen-themes-corrupted = El vostre fitxer de modificacions { -brand-short-name } està malmès. S'ha restablert al tema per defecte.
 zen-shortcuts-corrupted = El vostre fitxer de dreceres { -brand-short-name } està malmès. S'ha restablert a les dreceres per defecte.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Afegeix extensions
 zen-site-data-site-settings = 
     .label = Totes les configuracions del lloc
-zen-site-data-header-share = 
-    .tooltiptext = Comparteix aquesta pàgina
 zen-site-data-header-reader-mode = 
     .tooltiptext = Accedeix al mode lectura
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = Protecció contra el seguiment
 
 zen-site-data-panel-feature-callout-title = Una nova ubicació per a les extenions, permisos i molt més
 zen-site-data-panel-feature-callout-subtitle = Feu clic a la icona per gestionar la configuració del lloc, veure la informació de seguretat, accedir a les extensions i dur a terme accions habituals.
-zen-open-link-in-glance = 
-    .label = Obre l'enllaç en un cop d'ull
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Actualització completada!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Novetats a { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Mostra les notes de la versió
-zen-sidebar-notification-donate-label = Ajudeu-nos { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Feu una donació al projecte
-zen-sidebar-notification-restart-safe-mode-label = Alguna cosa no funciona?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Reinici en mode segur
 zen-window-sync-migration-dialog-title = Mantingueu les finestres sincronitzades
 zen-window-sync-migration-dialog-message = El Zen ara sincronitza les finestres del mateix dispositiu, de manera que els canvis en una finestra es reflecteixen a les altres a l'instant.
 zen-window-sync-migration-dialog-learn-more = Més informació

@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Cambia Etichetta...
 tab-context-zen-edit-icon = 
     .label = Cambia icona...
-zen-themes-corrupted = Il tuo file { -brand-short-name } mods è danneggiato. Sono stati reimpostati al tema predefinito.
 zen-shortcuts-corrupted = Il file delle scorciatoie per { -brand-short-name } è corrotto. Le scorciatoie sono state riportate alle impostazioni predefinite.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification = La nuova barra degli indirizzi è stata abilitata, eliminando la necessità della pagina di una nuova scheda.<br/><br/>Prova ad aprire una nuova scheda per vedere la nuova barra degli indirizzi in azione!
@@ -100,8 +97,6 @@ zen-site-data-get-addons =
     .label = Aggiungi estensioni
 zen-site-data-site-settings = 
     .label = Tutte le impostazioni del sito
-zen-site-data-header-share = 
-    .tooltiptext = Condividi questa pagina
 zen-site-data-header-reader-mode = 
     .tooltiptext = Entra nella Modalità Lettura
 zen-site-data-header-screenshot = 
@@ -116,22 +111,7 @@ zen-site-data-setting-site-protection = Protezione Tracciamento
 
 zen-site-data-panel-feature-callout-title = Una nuova casa per componenti aggiuntivi, permessi, e altro ancora
 zen-site-data-panel-feature-callout-subtitle = Clicca l'icona per gestire le impostazioni del sito, visualizzare informazioni di sicurezza, accedere alle estensioni, ed eseguire azioni comuni.
-zen-open-link-in-glance = 
-    .label = Apri collegamento in Sguardo
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Aggiornamento completato!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Cosa c'è di nuovo in { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Vedi Note di Rilascio
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = Si è rotto qualcosa?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Riavvia in Modalità Provvisoria
 zen-window-sync-migration-dialog-title = Mantieni le tue Finestre sincronizzate
 zen-window-sync-migration-dialog-message = Zen ora sincronizza le finestre sullo stesso dispositivo, quindi le modifiche in una finestra si riflettono istantaneamente sulle altre.
 zen-window-sync-migration-dialog-learn-more = Scopri di più

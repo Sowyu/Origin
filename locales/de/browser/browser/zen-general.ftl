@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Bearbeiten...
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Titel ändern...
 tab-context-zen-edit-icon = 
     .label = Symbol ändern...
-zen-themes-corrupted = Deine { -brand-short-name }-Mods-Datei ist beschädigt. Sie wurde auf das Standard-Design zurückgesetzt.
 zen-shortcuts-corrupted = Deine { -brand-short-name }-Tastenkombinationsdatei ist beschädigt. Sie wurde auf die Standard-Tastenkombinationen zurückgesetzt.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Erweiterungen hinzufügen
 zen-site-data-site-settings = 
     .label = Alle Website-Einstellungen
-zen-site-data-header-share = 
-    .tooltiptext = Diese Seite teilen
 zen-site-data-header-reader-mode = 
     .tooltiptext = Lesemodus aktivieren
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = Tracking-Schutz
 
 zen-site-data-panel-feature-callout-title = Hier findest du Add-ons, Berechtigungen und mehr
 zen-site-data-panel-feature-callout-subtitle = Klicke auf das Symbol, um Website-Einstellungen anzupassen, Sicherheitsinfos anzuzeigen, auf Erweiterungen zuzugreifen und häufige Aktionen auszuführen.
-zen-open-link-in-glance = 
-    .label = Link in Schnellansicht öffnen
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Update abgeschlossen!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Was in { -brand-short-name } neu ist
-zen-sidebar-notification-updated-tooltip = 
-    .title = Versionshinweise anzeigen
-zen-sidebar-notification-donate-label = Unterstütze { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Spende für das Projekt
-zen-sidebar-notification-restart-safe-mode-label = Funktioniert etwas nicht?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Im abgesicherten Modus neu starten
 zen-window-sync-migration-dialog-title = Halte deine Fenster synchron
 zen-window-sync-migration-dialog-message = Zen synchronisiert jetzt Fenster auf demselben Gerät, sodass Änderungen in einem Fenster sofort in den anderen übernommen werden.
 zen-window-sync-migration-dialog-learn-more = Mehr erfahren

@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Keisti žymę...
 tab-context-zen-edit-icon = 
     .label = Keisti piktogramą...
-zen-themes-corrupted = Jūsų „{ -brand-short-name }“ modifikacijos failas sugadintas. Jie buvo atkurti į numatytąją temą.
 zen-shortcuts-corrupted = Jūsų „{ -brand-short-name }“ sparčiųjų klavišų failas sugadintas. Jie buvo atkurti į numatytuosius sparčiuosius klavišus.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Įtraukti plėtinius
 zen-site-data-site-settings = 
     .label = Visi svetainės nustatymai
-zen-site-data-header-share = 
-    .tooltiptext = Bendrinti šį puslapį
 zen-site-data-header-reader-mode = 
     .tooltiptext = Įeiti į skaitytojo režimą
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = Stebėjimo apsauga
 
 zen-site-data-panel-feature-callout-title = Nauji namai priedams, leidimams ir daugiau
 zen-site-data-panel-feature-callout-subtitle = Spustelėkite piktogramą, kad tvarkytumėte svetainės nustatymus, peržiūrėtumėte saugumo informaciją, pasiektumėte plėtinius ir atliktumėte įprastus veiksmus.
-zen-open-link-in-glance = 
-    .label = Atverti nuorodą rodinyje „Glance“
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Naujinimas baigtas.
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Kas naujo naršyklėje „{ -brand-short-name }“
-zen-sidebar-notification-updated-tooltip = 
-    .title = Peržiūrėti leidimo pastabas
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = Kažkas neveikia?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Paleisti iš naujo saugioje režime
 zen-window-sync-migration-dialog-title = Išlaikykite savo langus sinchronizuotus
 zen-window-sync-migration-dialog-message = „Zen“ dabar sinchronizuoja langus tame pačiame įrenginyje, todėl viename lange atlikti pakeitimai iš karto atsispindi ir kituose.
 zen-window-sync-migration-dialog-learn-more = Sužinoti daugiau

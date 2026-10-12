@@ -2112,12 +2112,6 @@ interface MediaConfiguration {
   video?: VideoConfiguration;
 }
 
-interface MediaControllerPositionState {
-  duration: number;
-  playbackRate: number;
-  position: number;
-}
-
 interface MediaDecoderDebugInfo {
   PlayState?: string;
   channels?: number;
@@ -6233,7 +6227,6 @@ interface BrowsingContext extends LoadContextMixin {
   readonly isDiscarded: boolean;
   readonly isDocumentPiP: boolean;
   readonly isInBFCache: boolean;
-  isZenBoostsInverted: boolean;
   languageOverride: string;
   mediumOverride: string;
   readonly name: string;
@@ -6255,8 +6248,6 @@ interface BrowsingContext extends LoadContextMixin {
   useGlobalHistory: boolean;
   watchedByDevTools: boolean;
   readonly window: WindowProxy | null;
-  zenBoostsComplementaryRotation: number;
-  zenBoostsData: number;
   getAllBrowsingContextsInSubtree(): BrowsingContext[];
   resetNavigationRateLimit(): void;
   resetOrientationOverride(): void;
@@ -18395,7 +18386,6 @@ interface MediaController extends EventTarget {
   readonly isActive: boolean;
   readonly isAnyMediaBeingControlled: boolean;
   readonly isAudible: boolean;
-  readonly isBeingUsedInPIPModeOrFullscreen: boolean;
   readonly isPlaying: boolean;
   onactivated: ((this: MediaController, ev: Event) => any) | null;
   onaudiblechange: ((this: MediaController, ev: Event) => any) | null;
@@ -18410,7 +18400,6 @@ interface MediaController extends EventTarget {
   readonly supportedKeys: MediaControlKey[];
   focus(): void;
   getMetadata(): MediaMetadataInit;
-  getPositionState(): MediaControllerPositionState;
   nextTrack(): void;
   pause(): void;
   play(): void;

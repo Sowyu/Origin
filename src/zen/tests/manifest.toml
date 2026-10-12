@@ -28,10 +28,6 @@ prefs = [
 [linkHandling]
 source = "browser/base/content/test/linkHandling"
 is_direct_path = true
-disable = [
-  # Glance opens with alt+click, firefox doesnt know that.
-  "browser_javascript_links.js",
-]
 
 [readermode]
 source = "toolkit/components/reader/tests/browser"

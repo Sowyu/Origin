@@ -100,28 +100,7 @@ window.gZenCommonActions = {
 
     ClipboardHelper.copyString(displaySpec);
 
-    let button;
-    /* eslint-disable mozilla/valid-services */
-    if (Services.zen.canShare() && displaySpec.startsWith("http")) {
-      button = {
-        id: "zen-copy-current-url-button",
-        command: event => {
-          const buttonRect = event.target.getBoundingClientRect();
-          /* eslint-disable mozilla/valid-services */
-          Services.zen.share(
-            currentUrl,
-            "",
-            "",
-            buttonRect.left,
-            window.innerHeight - buttonRect.bottom,
-            buttonRect.width,
-            buttonRect.height
-          );
-        },
-      };
-    }
     gZenUIManager.showToast("zen-copy-current-url-confirmation", {
-      button,
       timeout: 3000,
     });
   },

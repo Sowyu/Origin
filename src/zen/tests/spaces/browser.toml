@@ -10,8 +10,6 @@ support-files = [
 
 ["browser_basic_workspaces.js"]
 
-["browser_bookmark_workspace_storage.js"]
-
 ["browser_double_click_newtab.js"]
 
 ["browser_issue_10455.js"]
@@ -37,5 +35,3 @@ support-files = [
 ["browser_theme_algorithm.js"]
 
 ["browser_unload_all_other_spaces.js"]
-
-["browser_workspace_bookmarks.js"]

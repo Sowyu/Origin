@@ -3,35 +3,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 {
-  const lazy = {};
-
-  ChromeUtils.defineESModuleGetters(
-    lazy,
-    {
-      ZenLibrary: "moz-src:///zen/library/ZenLibrary.mjs",
-    },
-    { global: "current" }
-  );
-
-  const ZEN_LIBRARY_TARGETS = {
-    "Browser:ShowAllHistory": "history",
-    key_gotoHistory: "history",
-    "Tools:Downloads": "downloads",
-  };
-
-  document.addEventListener(
-    "command",
-    event => {
-      const tab = ZEN_LIBRARY_TARGETS[event.target.id];
-      if (!tab || !Services.prefs.getBoolPref("zen.library.enabled")) {
-        return;
-      }
-      event.stopPropagation();
-      lazy.ZenLibrary.toggle(tab);
-    },
-    true
-  );
-
   document.addEventListener(
     "MozBeforeInitialXULLayout",
     () => {
@@ -70,9 +41,6 @@
               break;
             case "cmd_zenSplitViewContextMenu":
               gZenViewSplitter.contextSplitTabs();
-              break;
-            case "cmd_zenCtxShareSplitView":
-              gZenViewSplitter.contextShareSplitView();
               break;
             case "cmd_zenCopyCurrentURLMarkdown":
               gZenCommonActions.copyCurrentURLAsMarkdownToClipboard();
@@ -123,9 +91,6 @@
             case "cmd_zenCtxDeleteWorkspace":
               gZenWorkspaces.contextDeleteWorkspace(event);
               break;
-            case "cmd_zenCtxShareWorkspace":
-              gZenWorkspaces.contextShareWorkspace();
-              break;
             case "cmd_zenChangeWorkspaceName":
               gZenVerticalTabsManager.renameTabStart({
                 target: gZenWorkspaces.activeWorkspaceIndicator.querySelector(
@@ -151,9 +116,7 @@
               });
               break;
             case "cmd_zenTogglePinTab": {
-              const currentTab = gZenGlanceManager.getTabOrGlanceParent(
-                gBrowser.selectedTab
-              );
+              const currentTab = gBrowser.selectedTab;
               if (currentTab && !currentTab.hasAttribute("zen-empty-tab")) {
                 if (currentTab.pinned) {
                   gBrowser.unpinTab(currentTab);
@@ -174,20 +137,9 @@
               gZenWorkspaces.unloadAllOtherWorkspaces();
               break;
             }
-            case "cmd_zenOpenSpaceRoutingSettings": {
-              gZenSpaceRoutingManager.openSpaceRoutingDialog(window);
-              break;
-            }
             case "cmd_zenNewNavigatorUnsynced":
               OpenBrowserWindow({ zenSyncedWindow: false });
               break;
-            case "cmd_zenNewLiveFolder": {
-              const { ZenLiveFoldersManager } = ChromeUtils.importESModule(
-                "resource:///modules/zen/ZenLiveFoldersManager.sys.mjs"
-              );
-              ZenLiveFoldersManager.handleEvent(event);
-              break;
-            }
             case "cmd_zenDuplicateTab": {
               const selectedTabs = gBrowser.selectedTabs;
               let insertAt = selectedTabs.at(-1).index + 1;
@@ -196,12 +148,7 @@
               }
               break;
             }
-            case "cmd_zenToggleLibrary": {
-              lazy.ZenLibrary.toggle();
-              break;
-            }
             default:
-              gZenGlanceManager.handleMainCommandSet(event);
               if (event.target.id.startsWith("cmd_zenWorkspaceSwitch")) {
                 const index =
                   parseInt(

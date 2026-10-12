@@ -23,7 +23,6 @@ export default [
   "gZenWorkspaces",
   "gZenKeyboardShortcutsManager",
   "ZenWorkspacesEngine",
-  "ZenWorkspaceBookmarksStorage",
 
   "ZEN_KEYSET_ID",
 
@@ -32,17 +31,10 @@ export default [
   "gZenEmojiPicker",
   "gZenSessionStore",
   "gZenFolders",
-  "gZenMediaController",
-  "gZenGlanceManager",
-  "gZenLiveFoldersUI",
 
   "gZenThemePicker",
 
   "gZenViewSplitter",
-
-  "gZenShareManager",
-
-  "gZenSpaceRoutingManager",
 
   "Ci",
   "Cu",

@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = שינוי תווית...
 tab-context-zen-edit-icon = 
     .label = שינוי סמל...
-zen-themes-corrupted = קובץ השפצור { -brand-short-name } שלך פגום. בוצע איפוס לערכת הנושא ברירת המחדל.
 zen-shortcuts-corrupted = קיצורי דרך { -brand-short-name } פגום. הם אופסו לקיצורי דרך ברירת מחדל.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification = הופעלה שורת הכתובת החדשה, כך שאין צורך בעמודי לשונית חדשה.<br/><br/>אפשר לפתוח לשונית חדשה ולראות את שורת הכתובת החדשה בפעולה!
@@ -100,8 +97,6 @@ zen-site-data-get-addons =
     .label = הוספת הרחבות
 zen-site-data-site-settings = 
     .label = הגדרות כל האתרים
-zen-site-data-header-share = 
-    .tooltiptext = שיתוף עמוד זה
 zen-site-data-header-reader-mode = 
     .tooltiptext = כניסה למצב קריאה
 zen-site-data-header-screenshot = 
@@ -116,22 +111,7 @@ zen-site-data-setting-site-protection = הגנת מעקב
 
 zen-site-data-panel-feature-callout-title = בית חדש לתוספים, הרשאות, ועוד
 zen-site-data-panel-feature-callout-subtitle = ניתן ללחוץ על הסמל כדי לנהל הגדרות אתר, לצפות במידע אבטחה, לגשת לתוספים, ולבצע פעולות נפוצות.
-zen-open-link-in-glance = 
-    .label = קישור חדש במבט מהיר
-    .accesskey = ע
-zen-sidebar-notification-updated-heading = העדכון הושלם!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = מה חדש ב־{ -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = צפייה בהערות שחרור הגרסה
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = משהו השתבש?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = הפעלה מחדש במצב בטוח
 zen-window-sync-migration-dialog-title = החלונות שלך עכשיו מסונכרנים
 zen-window-sync-migration-dialog-message = Zen עכשיו מסנכרן חלונות על אותו מכשיר, כך ששינוים בחלון אחד מושקפים מיידית על האחרים.
 zen-window-sync-migration-dialog-learn-more = מידע נוסף

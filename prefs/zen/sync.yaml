@@ -49,23 +49,7 @@
 - name: services.sync.prefs.sync.zen.workspaces.separate-essentials
   value: true
 
-# Glance
-- name: services.sync.prefs.sync.zen.glance.enable-contextmenu-search
-  value: true
-
-- name: services.sync.prefs.sync.zen.glance.open-essential-external-links
-  value: true
-
 # Browser view
 
 - name: services.sync.prefs.sync.zen.view.show-newtab-button-top
-  value: true
-
-- name: services.sync.prefs.sync.zen.view.drag-window-from-content
-  value: true
-
-- name: services.sync.prefs.sync.zen.view.show-clear-tabs-button
-  value: true
-
-- name: services.sync.prefs.sync.zen.view.enable-loading-indicator
   value: true

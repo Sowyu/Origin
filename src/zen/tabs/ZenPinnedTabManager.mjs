@@ -229,6 +229,12 @@ class nsZenPinnedTabManager extends nsZenDOMOperatedFeature {
       return;
     }
 
+    // Origin has no tab rename, but tabs from a Zen profile keep their
+    // custom title. Reset clears it.
+    if (typeof tab.zenStaticLabel === "string") {
+      delete tab.zenStaticLabel;
+      gBrowser.setTabTitle(tab);
+    }
     this.#resetTabToStoredState(tab);
   }
 
@@ -379,34 +385,6 @@ class nsZenPinnedTabManager extends nsZenDOMOperatedFeature {
               gBrowser.selectedTab = tabToBlurTo;
             }
             for (const tab of pinnedTabs) {
-              if (tab.hasAttribute("glance-id")) {
-                // We have a glance tab inside the tab we are trying to unload,
-                // before we used to just ignore it but now we need to fully close
-                // it as well.
-                gZenGlanceManager.manageTabClose(tab.glanceTab);
-                await new Promise(resolve => {
-                  let hasRan = false;
-                  const onGlanceClose = () => {
-                    hasRan = true;
-                    resolve();
-                  };
-                  window.addEventListener("GlanceClose", onGlanceClose, {
-                    once: true,
-                  });
-                  // Set a timeout to resolve the promise if the event doesn't fire.
-                  // We do this to prevent any future issues where glance woudnt close such as
-                  // glance requering to ask for permit unload.
-                  setTimeout(() => {
-                    if (!hasRan) {
-                      console.warn(
-                        "GlanceClose event did not fire within 3 seconds"
-                      );
-                      resolve();
-                    }
-                  }, 3000);
-                });
-                return;
-              }
               const isSpltView = tab.group?.hasAttribute("split-view-group");
               const group = isSpltView ? tab.group.group : tab.group;
               if (!folderToUnload && tab.hasAttribute("folder-active")) {
@@ -657,20 +635,12 @@ class nsZenPinnedTabManager extends nsZenDOMOperatedFeature {
                       hidden="true"
                       command="cmd_contextZenRemoveFromEssentials"/>
             <menuseparator/>
-            <menuitem id="context_zen-edit-tab-title"
-                      data-lazy-l10n-id="tab-context-zen-edit-title"
-                      hidden="true"/>
             <menuitem id="context_zen-edit-tab-icon"
                       data-lazy-l10n-id="tab-context-zen-edit-icon"/>
             <menuseparator/>
         `);
 
     document.getElementById("context_pinTab")?.before(element);
-    document
-      .getElementById("context_zen-edit-tab-title")
-      .addEventListener("command", event => {
-        gZenVerticalTabsManager.renameTabStart(event);
-      });
     document
       .getElementById("context_zen-edit-tab-icon")
       .addEventListener("command", () => {
@@ -748,10 +718,6 @@ class nsZenPinnedTabManager extends nsZenDOMOperatedFeature {
       isEssential;
     document.getElementById("context_zen-pinned-tab-separator").hidden =
       !isVisible;
-    document.getElementById("context_zen-edit-tab-title").hidden =
-      isEssential ||
-      !Services.prefs.getBoolPref("zen.tabs.rename-tabs") ||
-      !gZenVerticalTabsManager._prefsSidebarExpanded;
   }
 
   // eslint-disable-next-line complexity
@@ -1125,7 +1091,6 @@ class nsZenPinnedTabManager extends nsZenDOMOperatedFeature {
 
     // Calculate middle to decide 'before' or 'after'
     const rect = targetTab.getBoundingClientRect();
-    let shouldPlayHapticFeedback = false;
     if (isVertical || !this.expandedSidebarMode) {
       const separation = 8;
       const middleY = targetTab.screenY + rect.height / 2;
@@ -1136,9 +1101,6 @@ class nsZenPinnedTabManager extends nsZenDOMOperatedFeature {
         top = Math.round(rect.top + rect.height) + "px";
       } else {
         top = Math.round(rect.top) + "px";
-      }
-      if (indicator.style.top !== top) {
-        shouldPlayHapticFeedback = true;
       }
       indicator.setAttribute("orientation", "horizontal");
       indicator.style.setProperty(
@@ -1161,9 +1123,6 @@ class nsZenPinnedTabManager extends nsZenDOMOperatedFeature {
       } else {
         left = Math.round(rect.left - 2) + "px";
       }
-      if (indicator.style.left !== left) {
-        shouldPlayHapticFeedback = true;
-      }
       indicator.setAttribute("orientation", "vertical");
       indicator.style.setProperty(
         "--indicator-top",
@@ -1175,10 +1134,6 @@ class nsZenPinnedTabManager extends nsZenDOMOperatedFeature {
       );
       indicator.style.left = left;
       indicator.style.removeProperty("top");
-    }
-    if (shouldPlayHapticFeedback) {
-      // eslint-disable-next-line mozilla/valid-services
-      Services.zen.playHapticFeedback();
     }
   }
 

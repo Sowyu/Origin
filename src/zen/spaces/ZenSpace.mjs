@@ -65,10 +65,6 @@ export class nsZenWorkspace extends MozXULElement {
             <html:div class="zen-tab-group-start space-fake-collapsible-start" style="order: -9999;" />
             <hbox class="pinned-tabs-container-separator">
               <toolbarseparator flex="1" />
-              <toolbarbutton command="cmd_zenCloseUnpinnedTabs"
-                             tooltip="dynamic-shortcut-tooltip"
-                             data-l10n-id="zen-workspaces-close-all-unpinned-tabs-title"
-                             class="zen-workspace-close-unpinned-tabs-button" />
             </hbox>
           </vbox>
           <vbox class="zen-workspace-tabs-section zen-workspace-normal-tabs-section">

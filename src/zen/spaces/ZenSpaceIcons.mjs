@@ -64,7 +64,6 @@ class nsZenWorkspaceIcons extends MozXULElement {
               mouse > rect[isVertical ? "top" : "left"] &&
               mouse < rect[isVertical ? "bottom" : "right"]
             ) {
-              const nextSibling = draggedTab.nextSibling;
               if (
                 mouse <
                 rect[isVertical ? "top" : "left"] +
@@ -73,10 +72,6 @@ class nsZenWorkspaceIcons extends MozXULElement {
                 this.insertBefore(draggedTab, tab);
               } else {
                 this.insertBefore(draggedTab, tab.nextSibling);
-              }
-              if (nextSibling !== draggedTab.nextSibling) {
-                /* eslint-disable mozilla/valid-services */
-                Services.zen.playHapticFeedback();
               }
             }
           }

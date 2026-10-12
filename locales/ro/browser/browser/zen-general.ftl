@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Editează…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Change Label...
 tab-context-zen-edit-icon = 
     .label = Change Icon...
-zen-themes-corrupted = Fișierul tău de moduri { -brand-short-name } este corupt. Acestea au fost resetate la tema implicită.
 zen-shortcuts-corrupted = Fișierul tău de scurtături { -brand-short-name } este corupt. Acestea au fost resetate la scurtăturile implicite.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Adaugă Extensii
 zen-site-data-site-settings = 
     .label = Toate Setările Site-ului
-zen-site-data-header-share = 
-    .tooltiptext = Distribuie Această Pagină
 zen-site-data-header-reader-mode = 
     .tooltiptext = Intră în Modul Cititor
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = Protecție împotriva Urmăririi
 
 zen-site-data-panel-feature-callout-title = O casă nouă pentru Suplimente, Permisiuni și multe altele
 zen-site-data-panel-feature-callout-subtitle = Apasă pe iconiță pentru a gestiona setările site-ului, pentru a vizualiza informațiile de securitate, accesul extensiilor și pentru a efectua acțiuni comune.
-zen-open-link-in-glance = 
-    .label = Deschide link-ul în Glance
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Actualizare finalizată!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Ce este nou în { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Vezi Notele de Lansare
-zen-sidebar-notification-donate-label = Suportă { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donează proiectului
-zen-sidebar-notification-restart-safe-mode-label = S-a stricat ceva?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Repornește în Modul Sigur
 zen-window-sync-migration-dialog-title = Păstrează-ți Ferestrele Sincronizate
 zen-window-sync-migration-dialog-message = Zen sincronizează ferestrele pe același dispozitiv, deci modificările dintr-o fereastră sunt reflectate instantaneu la celelalte ferestre.
 zen-window-sync-migration-dialog-learn-more = Află mai multe

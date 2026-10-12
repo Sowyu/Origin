@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Newid Label...
 tab-context-zen-edit-icon = 
     .label = Newid Eicon...
-zen-themes-corrupted = Mae eich ffeil addasiadau { -brand-short-name } wedi'i llygru. Maen nhw wedi cael eu hailosod i'r thema rhagosodedig.
 zen-shortcuts-corrupted = Mae eich ffeil llwybr-byr { -brand-short-name } wedi'i llygru. Maen nhw wedi cael eu hailosod i'r llwybr byr rhagosodedig.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Ychwanegu Estyniadau
 zen-site-data-site-settings = 
     .label = Pob Gosodiad Gwefan
-zen-site-data-header-share = 
-    .tooltiptext = Rhannu'r Dudalen Hon
 zen-site-data-header-reader-mode = 
     .tooltiptext = Mynd i'r Modd Darllenydd
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = Diogelu Rhag Tracio
 
 zen-site-data-panel-feature-callout-title = Cartref newydd ar gyfer ychwanegiadau, caniatâd, a mwy
 zen-site-data-panel-feature-callout-subtitle = Cliciwch yr eicon i reoli gosodiadau'r wefan, gweld manylion diogelwch, cael mynediad at estyniadau, a chyflawni gweithredoedd cyffredin.
-zen-open-link-in-glance = 
-    .label = Agor y Ddolen yn Cipolwg
-    .accesskey = C
-zen-sidebar-notification-updated-heading = Diweddariad Wedi'i Gwblhau!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Beth sy'n newydd yn { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Gweld Nodiadau Rhyddhau
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = Rhywbeth wedi torri?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Ailgychwyn yn y Modd Diogel
 zen-window-sync-migration-dialog-title = Cadw Eich Ffenestr Wedi'u Cydweddu
 zen-window-sync-migration-dialog-message = Mae Zen bellach yn cydweddu ffenestri ar yr un ddyfais, felly mae newidiadau mewn un ffenestr yn cael eu dangos ar y lleill yn syth.
 zen-window-sync-migration-dialog-learn-more = Dysgu Rhagor

@@ -61,44 +61,6 @@
                       data-l10n-id="zen-look-and-feel-compact-toolbar-flash-popup"
                       preference="zen.view.compact.toolbar-flash-popup"/>
       </vbox>
-
-      <label><html:h2 data-l10n-id="zen-look-and-feel-window-drag-header"/></label>
-      <description class="description-deemphasized" data-l10n-id="zen-look-and-feel-window-drag-description" />
-
-      <vbox class="indent">
-            <checkbox id="zenLooksAndFeelWindowDragEnabled"
-                  data-l10n-id="zen-window-drag-enabled"
-                  preference="zen.view.drag-window-from-content"/>
-      </vbox>
-</groupbox>
-
-<hbox id="zenGlanceCategory"
-      class="subcategory"
-      hidden="true"
-      data-category="paneZenLooks">
-<html:h1 data-l10n-id="zen-glance-title"/>
-</hbox>
-
-<groupbox id="zenGlanceGroup" data-category="paneZenLooks" hidden="true" class="highlighting-group">
-      <label><html:h2 data-l10n-id="zen-glance-header"/></label>
-      <description class="description-deemphasized" data-l10n-id="zen-glance-description" />
-
-      <checkbox id="zenLooksAndFeelGlanceEnabled"
-            data-l10n-id="zen-glance-enabled"
-            preference="zen.glance.enabled"/>
-      <hbox align="center">
-            <label id="zenGlanceTriggerLabel" data-l10n-id="zen-glance-trigger-label"/>
-            <menulist id="zenGlanceTrigger" preference="zen.glance.activation-method">
-                  <menupopup>
-                        <menuitem data-l10n-id="zen-glance-trigger-ctrl-click" value="ctrl"/>
-                        <menuitem data-l10n-id="zen-glance-trigger-alt-click" value="alt"/>
-                        <menuitem data-l10n-id="zen-glance-trigger-shift-click" value="shift"/>
-#ifdef XP_MACOSX
-                        <menuitem data-l10n-id="zen-glance-trigger-meta-click" value="meta"/>
-#endif
-                  </menupopup>
-            </menulist>
-        </hbox>
 </groupbox>
 
 <hbox id="zenUrlBarCategory"

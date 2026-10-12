@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Đổi tên...
 tab-context-zen-edit-icon = 
     .label = Đổi biểu tượng...
-zen-themes-corrupted = Thư mục chủ đề { -brand-short-name } của bạn đã bị hư, chúng đã được trả về thiết kế gốc.
 zen-shortcuts-corrupted = Tệp phím tắt { -brand-short-name } của bạn đã bị hư. Chúng đã được trẻ về phím tắt gốc.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification = Thanh địa chỉ mới đã được bật, giúp bạn không cần đến trang Thẻ mới nữa.<br/><br/>Hãy thử mở một thẻ mới để xem thanh địa chỉ hoạt động thế nào nhé!
@@ -100,8 +97,6 @@ zen-site-data-get-addons =
     .label = Thêm tiện ích mở rộng (Extensions)
 zen-site-data-site-settings = 
     .label = Cài đặt tổng quan của trang web
-zen-site-data-header-share = 
-    .tooltiptext = Chia sẻ trang này
 zen-site-data-header-reader-mode = 
     .tooltiptext = Bật chế độ đọc
 zen-site-data-header-screenshot = 
@@ -116,22 +111,7 @@ zen-site-data-setting-site-protection = Phòng chống theo dõi
 
 zen-site-data-panel-feature-callout-title = Diện mạo mới cho add-ons, quyền truy cập và nhiều hơn nữa
 zen-site-data-panel-feature-callout-subtitle = Bấm vào biểu tượng để quản lý các thiết lập của trang web, kiểm tra thông tin bảo mật, quyền truy cập của các tiện ích và thực thiện các tác vụ cơ bản.
-zen-open-link-in-glance = 
-    .label = Mở liên kết trong xem nhanh
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Cập nhật hoàn tất!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Có gì mới trong { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Xem ghi chú phát hành
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = Có lỗi xảy ra?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Khởi động lại ở Chế độ an toàn
 zen-window-sync-migration-dialog-title = Luôn đồng bộ các cửa sổ
 zen-window-sync-migration-dialog-message = Zen hiện đã đồng bộ hóa các cửa sổ trên cùng một thiết bị, mọi thay đổi sẽ được cập nhật tức thì trên toàn bộ cửa sổ còn lại.
 zen-window-sync-migration-dialog-learn-more = Tìm hiểu thêm

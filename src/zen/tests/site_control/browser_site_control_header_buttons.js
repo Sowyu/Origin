@@ -3,10 +3,6 @@
 
 "use strict";
 
-function shareButton() {
-  return document.getElementById("zen-site-data-header-share");
-}
-
 function bookmarkButton() {
   return document.getElementById("zen-site-data-header-bookmark");
 }
@@ -14,35 +10,6 @@ function bookmarkButton() {
 function readerButton() {
   return document.getElementById("zen-site-data-header-reader-mode");
 }
-
-add_task(async function test_share_button_reflects_scheme() {
-  const tab = BrowserTestUtils.addTab(gBrowser, HTTPS_PAGE, {
-    skipAnimation: true,
-  });
-  await BrowserTestUtils.browserLoaded(tab.linkedBrowser);
-  await BrowserTestUtils.switchTab(gBrowser, tab);
-
-  try {
-    await openSiteDataPanel();
-    ok(
-      !shareButton().hasAttribute("disabled"),
-      "share button is enabled on https pages"
-    );
-    await closeSiteDataPanel();
-
-    await loadUrl("about:blank");
-
-    await openSiteDataPanel();
-    ok(
-      shareButton().hasAttribute("disabled"),
-      "share button is disabled on about:blank"
-    );
-    await closeSiteDataPanel();
-  } finally {
-    await closeSiteDataPanel();
-    BrowserTestUtils.removeTab(tab);
-  }
-});
 
 add_task(async function test_bookmark_button_reflects_starred_state() {
   const tab = BrowserTestUtils.addTab(gBrowser, HTTPS_PAGE, {

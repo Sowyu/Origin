@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = 编辑…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = 更改标签…
 tab-context-zen-edit-icon = 
     .label = 更改图标…
-zen-themes-corrupted = 您的 { -brand-short-name } 模组文件已损坏。它们已重置为默认主题。
 zen-shortcuts-corrupted = 您的 { -brand-short-name } 快捷键文件已损坏。它们已重置为默认快捷键。
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification = 新的地址栏已启用，不再需要新标签页。<br/><br/>打开一个新标签页来试试看新地址栏！
@@ -100,8 +97,6 @@ zen-site-data-get-addons =
     .label = 添加扩展
 zen-site-data-site-settings = 
     .label = 所有站点设置
-zen-site-data-header-share = 
-    .tooltiptext = 分享此页面
 zen-site-data-header-reader-mode = 
     .tooltiptext = 进入阅读模式
 zen-site-data-header-screenshot = 
@@ -116,22 +111,7 @@ zen-site-data-setting-site-protection = 跟踪保护
 
 zen-site-data-panel-feature-callout-title = 附加组件、权限和各种功能的一站式界面
 zen-site-data-panel-feature-callout-subtitle = 点击图标以管理站点设置、查看安全信息、访问扩展，还可执行各种操作。
-zen-open-link-in-glance = 
-    .label = 在浮窗预览中打开链接
-    .accesskey = G
-zen-sidebar-notification-updated-heading = 更新完成！
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = 了解 { -brand-short-name } 的新版变化
-zen-sidebar-notification-updated-tooltip = 
-    .title = 查看更新日志
-zen-sidebar-notification-donate-label = 支持 { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = 为此项目捐赠
-zen-sidebar-notification-restart-safe-mode-label = 出了什么问题吗？
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = 在排障模式下重启
 zen-window-sync-migration-dialog-title = 保持您的窗口同步
 zen-window-sync-migration-dialog-message = Zen 现已支持同一设备上的窗口同步，一个窗口的更改将即时同步到其他窗口。
 zen-window-sync-migration-dialog-learn-more = 了解更多

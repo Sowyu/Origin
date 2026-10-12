@@ -76,23 +76,7 @@ class nsZenFolders extends nsZenDOMOperatedFeature {
     `);
     document.getElementById("context_moveTabToGroup").before(contextMenuItems);
     const contextMenuItemsToolbar = window.MozXULElement.parseXULToFragment(
-      `<menuitem id="zen-context-menu-new-folder-toolbar" data-l10n-id="zen-toolbar-context-new-folder"/>
-       <menu data-l10n-id="zen-panel-ui-live-folder-create" id="zen-panel-ui-live-folder-create">
-         <menupopup>
-           <menuitem
-             data-l10n-id="zen-live-folder-github-pull-requests"
-             command="cmd_zenNewLiveFolder"
-             image="chrome://browser/skin/zen-icons/selectable/logo-github.svg" />
-           <menuitem
-             data-l10n-id="zen-live-folder-github-issues"
-             command="cmd_zenNewLiveFolder"
-             image="chrome://browser/skin/zen-icons/selectable/logo-github.svg" />
-           <menuitem
-             data-l10n-id="zen-live-folder-type-rss"
-             command="cmd_zenNewLiveFolder"
-             image="chrome://browser/skin/zen-icons/selectable/logo-rss.svg"/>
-         </menupopup>
-       </menu>`
+      `<menuitem id="zen-context-menu-new-folder-toolbar" data-l10n-id="zen-toolbar-context-new-folder"/>`
     );
     document
       .getElementById("toolbar-context-openANewTab")
@@ -121,7 +105,6 @@ class nsZenFolders extends nsZenDOMOperatedFeature {
         return;
       }
       this.#lastFolderContextMenu = folder;
-      gZenLiveFoldersUI.buildContextMenu(folder);
 
       const newSubfolderItem = document.getElementById(
         "context_zenFolderNewSubfolder"
@@ -185,9 +168,6 @@ class nsZenFolders extends nsZenDOMOperatedFeature {
           break;
         case "context_zenFolderChangeIcon":
           this.changeFolderUserIcon(this.#lastFolderContextMenu);
-          break;
-        case "context_zenShareFolder":
-          gZenShareManager.shareFolder(this.#lastFolderContextMenu);
           break;
       }
     });
@@ -259,13 +239,8 @@ class nsZenFolders extends nsZenDOMOperatedFeature {
         : [TabContextMenu.contextTab];
       let groups = gBrowser.tabGroups.filter(group => {
         const isZenFolder = group?.isZenFolder;
-        const isLiveFolder = group?.isLiveFolder;
         const spaceId = group?.getAttribute("zen-workspace-id");
-        if (
-          !isZenFolder ||
-          isLiveFolder ||
-          spaceId !== gZenWorkspaces.activeWorkspace
-        ) {
+        if (!isZenFolder || spaceId !== gZenWorkspaces.activeWorkspace) {
           return false;
         }
         return !tabs.some(tab => tab.group === group);
@@ -355,7 +330,7 @@ class nsZenFolders extends nsZenDOMOperatedFeature {
       if (collapsedRoot) {
         this.#queueCollapsedRelayout(collapsedRoot);
       }
-    } else if (group.collapsed && !group.isLiveFolder) {
+    } else if (group.collapsed) {
       group.collapsed = group.hasAttribute("has-active");
     }
   }
@@ -398,7 +373,7 @@ class nsZenFolders extends nsZenDOMOperatedFeature {
   }
 
   async on_TabSelect(event) {
-    const tab = gZenGlanceManager.getTabOrGlanceParent(event.target);
+    const tab = event.target;
     let group = tab?.group;
     if (group?.hasAttribute("split-view-group")) {
       group = group?.group;
@@ -572,14 +547,6 @@ class nsZenFolders extends nsZenDOMOperatedFeature {
     }
     if (isFromToolbar) {
       tabs = [];
-    }
-
-    // Prevent create folder inside Live Folder
-    const thereIsOneLiveFolderTab = tabs?.some(tab =>
-      tab.hasAttribute("zen-live-folder-item-id")
-    );
-    if (thereIsOneLiveFolderTab) {
-      return;
     }
 
     const canInsertBefore =
@@ -769,7 +736,6 @@ class nsZenFolders extends nsZenDOMOperatedFeature {
     folder.label = options.label || "New Folder";
     folder.saveOnWindowClose = !!options.saveOnWindowClose;
     folder.color = "zen-workspace-color";
-    folder.isLiveFolder = options.isLiveFolder;
 
     folder.setAttribute(
       "zen-workspace-id",
@@ -1270,7 +1236,6 @@ class nsZenFolders extends nsZenDOMOperatedFeature {
         prevSiblingInfo,
         emptyTabIds: emptyFolderTabs,
         userIcon: userIcon?.getAttribute("href"),
-        isLiveFolder: folder.isLiveFolder,
         // note: We shouldn't be using the workspace-id anywhere, we are just
         //  remembering it for the pinned tabs manager to use it later.
         workspaceId: folder.getAttribute("zen-workspace-id"),
@@ -1312,7 +1277,6 @@ class nsZenFolders extends nsZenDOMOperatedFeature {
               pinned: folderData.pinned,
               saveOnWindowClose: folderData.saveOnWindowClose,
               workspaceId: folderData.workspaceId,
-              isLiveFolder: folderData.isLiveFolder,
             });
             folder.setAttribute("id", folderData.id);
             workingData.node = folder;

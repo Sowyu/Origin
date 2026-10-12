@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Cuir in eagar…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Athraigh Lipéad...
 tab-context-zen-edit-icon = 
     .label = Athraigh Deilbhín...
-zen-themes-corrupted = Tá do chomhad mods { -brand-short-name } truaillithe. Tá siad athshocraithe chuig an téama réamhshocraithe.
 zen-shortcuts-corrupted = Tá do chomhad aicearraí { -brand-short-name } truaillithe. Tá siad athshocraithe chuig na haicearraí réamhshocraithe.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Cuir Síneadh leis
 zen-site-data-site-settings = 
     .label = Gach Socrú Suímh
-zen-site-data-header-share = 
-    .tooltiptext = Comhroinn an Leathanach seo
 zen-site-data-header-reader-mode = 
     .tooltiptext = Téigh isteach i Mód Léitheora
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = Cosaint Rianaithe
 
 zen-site-data-panel-feature-callout-title = Baile nua do bhreiseáin, ceadanna agus tuilleadh
 zen-site-data-panel-feature-callout-subtitle = Cliceáil an deilbhín chun socruithe suímh a bhainistiú, faisnéis slándála a fheiceáil, rochtain a fháil ar shínteáin, agus gníomhartha coitianta a dhéanamh.
-zen-open-link-in-glance = 
-    .label = Oscail an Nasc i Glance
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Nuashonrú críochnaithe!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Cad atá nua i { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Féach ar Nótaí Eisiúna
-zen-sidebar-notification-donate-label = Tacaíocht { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Tabhair síntiús don tionscadal
-zen-sidebar-notification-restart-safe-mode-label = Bhris rud éigin?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Atosaigh i Mód Sábháilte
 zen-window-sync-migration-dialog-title = Coinnigh Do Windows Sioncrónaithe
 zen-window-sync-migration-dialog-message = Déanann Zen sioncrónú ar fhuinneoga ar an ngléas céanna anois, mar sin léirítear athruithe i bhfuinneog amháin sna fuinneoga eile láithreach.
 zen-window-sync-migration-dialog-learn-more = Foghlaim Tuilleadh

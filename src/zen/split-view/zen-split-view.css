@@ -78,15 +78,7 @@
 }
 
 :root:not([inDOMFullscreen="true"]) #tabbrowser-tabpanels[zen-split-view="true"] .browserSidebarContainer.deck-selected {
-  &:not(.zen-glance-overlay) {
-    outline: 2px solid var(--zen-active-split-outline-color) !important;
-  }
-
-  &.zen-glance-overlay {
-    flex: 1;
-    margin-top: calc(var(--zen-element-separation) / 2);
-    z-index: 1;
-  }
+  outline: 2px solid var(--zen-active-split-outline-color) !important;
 }
 
 #tabbrowser-tabbox {

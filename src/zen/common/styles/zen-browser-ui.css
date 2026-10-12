@@ -24,11 +24,6 @@ body,
   visibility: collapse;
 }
 
-:root[zen-before-loaded="true"] #browser > *:not(#zen-toast-container, #zen-browser-background),
-:root[zen-before-loaded="true"] #urlbar {
-  opacity: 0 !important;
-}
-
 #browser {
   background: transparent !important;
   width: 100%;

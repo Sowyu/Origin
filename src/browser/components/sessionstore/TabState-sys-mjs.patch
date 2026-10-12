@@ -1,8 +1,8 @@
 diff --git a/browser/components/sessionstore/TabState.sys.mjs b/browser/components/sessionstore/TabState.sys.mjs
-index bb7bd8c7ca88f776188fce64e0c85beb5ceb27a5..bdec77ba26172fe1b41369b1d45d5a6f9d52ae25 100644
+index 68e8cb51e3b6d8024d376aa7ca8458ed028ee954..465501845cf57a8ff2039fc2a7ee1df93682b304 100644
 --- a/browser/components/sessionstore/TabState.sys.mjs
 +++ b/browser/components/sessionstore/TabState.sys.mjs
-@@ -10,6 +10,7 @@ const lazy = XPCOMUtils.declareLazy({
+@@ -106,6 +106,7 @@ const lazy = XPCOMUtils.declareLazy({
      "moz-src:///browser/components/sessionstore/TabAttributes.sys.mjs",
    TabStateCache:
      "moz-src:///browser/components/sessionstore/TabStateCache.sys.mjs",
@@ -10,7 +10,7 @@ index bb7bd8c7ca88f776188fce64e0c85beb5ceb27a5..bdec77ba26172fe1b41369b1d45d5a6f
    sessionStoreLogger:
      "moz-src:///browser/components/sessionstore/SessionLogger.sys.mjs",
  });
-@@ -106,10 +107,28 @@ class _TabState {
+@@ -202,10 +203,25 @@ class _TabState {
        }
      }
  
@@ -23,11 +23,8 @@ index bb7bd8c7ca88f776188fce64e0c85beb5ceb27a5..bdec77ba26172fe1b41369b1d45d5a6f
 +    tabData.zenIsEmpty = tab.hasAttribute("zen-empty-tab");
 +    tabData.zenStaticLabel = tab.zenStaticLabel;
 +    tabData.zenHasStaticIcon = !!tab.zenStaticIcon;
-+    tabData.zenGlanceId = tab.getAttribute("glance-id");
-+    tabData.zenIsGlance = tab.hasAttribute("zen-glance-tab");
 +    tabData._zenPinnedInitialState = tab._zenPinnedInitialState;
 +    tabData._zenIsActiveTab = tab._zenContentsVisible;
-+    tabData.zenLiveFolderItemId = tab.getAttribute("zen-live-folder-item-id");
 +
      tabData.searchMode = tab.documentGlobal.gURLBar.getSearchMode(
        browser,
@@ -39,7 +36,7 @@ index bb7bd8c7ca88f776188fce64e0c85beb5ceb27a5..bdec77ba26172fe1b41369b1d45d5a6f
  
      tabData.userContextId = tab.userContextId || 0;
  
-@@ -135,6 +154,10 @@ class _TabState {
+@@ -231,6 +247,10 @@ class _TabState {
        tabData.image = tabbrowser.getIcon(tab);
      }
  

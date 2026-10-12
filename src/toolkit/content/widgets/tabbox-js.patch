@@ -1,5 +1,5 @@
 diff --git a/toolkit/content/widgets/tabbox.js b/toolkit/content/widgets/tabbox.js
-index 402fe6a74b5327a30199667de18f053ad75fe910..9bcbc827d18db2f996d964f7c7e3439e064c9e0d 100644
+index 962b5835159244177edf51a0139f2f3062cab12b..8672bb5b3ff05072316f397e2ddae108407a8fee 100644
 --- a/toolkit/content/widgets/tabbox.js
 +++ b/toolkit/content/widgets/tabbox.js
 @@ -11,6 +11,23 @@
@@ -26,16 +26,7 @@ index 402fe6a74b5327a30199667de18f053ad75fe910..9bcbc827d18db2f996d964f7c7e3439e
    let imports = {};
    ChromeUtils.defineESModuleGetters(imports, {
      DeferredTask: "resource://gre/modules/DeferredTask.sys.mjs",
-@@ -226,7 +243,7 @@
-     ) {
-       this._inAsyncOperation = false;
-       if (oldPanel != this._selectedPanel) {
--        oldPanel?.classList.remove("deck-selected");
-+        if (!(window.gZenGlanceManager && gZenGlanceManager.shouldShowDeckSelected(this._selectedPanel, oldPanel))) oldPanel?.classList.remove("deck-selected");
-         this._selectedPanel?.classList.add("deck-selected");
-       }
-       this.setAttribute("selectedIndex", val);
-@@ -898,7 +915,7 @@
+@@ -954,7 +971,7 @@
        if (!tab) {
          return;
        }
@@ -44,33 +35,16 @@ index 402fe6a74b5327a30199667de18f053ad75fe910..9bcbc827d18db2f996d964f7c7e3439e
          if (otherTab != tab && otherTab.selected) {
            otherTab._selected = false;
          }
-@@ -934,6 +951,7 @@
-      * @param {MozTab|null} [val]
-      */
-     set selectedItem(val) {
-+      val = window.gZenGlanceManager?.getTabOrGlanceChild(val) || val;
-       if (val && !val.selected) {
-         // The selectedIndex setter ignores invalid values
-         // such as -1 if |val| isn't one of our child nodes.
-@@ -1111,7 +1129,7 @@
+@@ -1167,7 +1184,7 @@
          if (tab == startTab) {
            return null;
          }
 -        if (filter(tab)) {
-+        if (filter(tab) && !tab.hasAttribute("zen-glance-tab") && !tab.hasAttribute("zen-empty-tab")) {
++        if (filter(tab) && !tab.hasAttribute("zen-empty-tab")) {
            return tab;
          }
        }
-@@ -1175,13 +1193,30 @@
-      */
-     // eslint-disable-next-line no-unused-vars
-     advanceSelectedTab(aDir, aWrap, aEvent) {
-+      if (window?.gZenGlanceManager?._animating) return;
-       let { ariaFocusedItem } = this;
-       let startTab = ariaFocusedItem;
-       if (!ariaFocusedItem || !this.allTabs.includes(ariaFocusedItem)) {
--        startTab = this.selectedItem;
-+        startTab = gZenGlanceManager.getFocusedTab(aDir) || this.selectedItem;
+@@ -1238,6 +1255,22 @@
        }
        let newTab = null;
  
@@ -93,7 +67,7 @@ index 402fe6a74b5327a30199667de18f053ad75fe910..9bcbc827d18db2f996d964f7c7e3439e
        // Handle keyboard navigation for a hidden tab that can be selected, like the Firefox View tab,
        // which has a random placement in this.allTabs.
        if (startTab.hidden) {
-@@ -1194,7 +1229,7 @@
+@@ -1250,7 +1283,7 @@
          newTab = this.findNextTab(startTab, {
            direction: aDir,
            wrap: aWrap,

@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Ubah Label...
 tab-context-zen-edit-icon = 
     .label = Ubah Ikon...
-zen-themes-corrupted = Tidak dapat memuat file tema { -brand-short-name } Anda karena rusak. File tersebut telah diatur ulang ke tema default.
 zen-shortcuts-corrupted = File pintasan { -brand-short-name } Anda rusak. Mereka telah diatur ulang ke pintasan default.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Tambahkan Ekstensi
 zen-site-data-site-settings = 
     .label = Semua Pengaturan Situs
-zen-site-data-header-share = 
-    .tooltiptext = Bagikan Halaman Ini
 zen-site-data-header-reader-mode = 
     .tooltiptext = Masuki Mode Membaca
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = Perlindungan Pelacakan
 
 zen-site-data-panel-feature-callout-title = Rumah baru untuk add-on, izin, dan lainnya
 zen-site-data-panel-feature-callout-subtitle = Klik ikon untuk mengelola pengaturan situs, melihat info keamanan, mengakses ekstensi, dan melakukan tindakan umum.
-zen-open-link-in-glance = 
-    .label = Buka Tautan di Glance
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Pembaruan Selesai!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Apa yang baru di { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Lihat Catatan Rilis
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = Ada yang rusak?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Mulai Ulang dalam Mode Aman
 zen-window-sync-migration-dialog-title = Jaga Jendela Anda Tetap Sinkron
 zen-window-sync-migration-dialog-message = Zen kini menyinkronkan jendela pada perangkat yang sama, sehingga perubahan di satu jendela akan langsung terlihat di jendela lainnya.
 zen-window-sync-migration-dialog-learn-more = Pelajari Lebih Lanjut

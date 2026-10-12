@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Breyta…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Skipta um merkingu...
 tab-context-zen-edit-icon = 
     .label = Skipta um táknmynd...
-zen-themes-corrupted = Viðbrigðaskráin þín fyrir { -brand-short-name } er skemmd. Þau notast í staðinn við sjálfgefið þema.
 zen-shortcuts-corrupted = Flýtivísaskráin þín { -brand-short-name } er skemmd. Þeir notast í staðinn við þá sjálfgefnu.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification = Nýja vefslóðastikan hefur verið virkjuð sem fjarlægir þörfina á nýjum flipasíðum.<br/><br/>Prófaðu að opna nýjan flipa til að sjá nýju vefslóðastikuna í notkun!
@@ -100,8 +97,6 @@ zen-site-data-get-addons =
     .label = Bæta við forritsaukum
 zen-site-data-site-settings = 
     .label = Allar vefsvæðastillingar
-zen-site-data-header-share = 
-    .tooltiptext = Deila þessari síðu
 zen-site-data-header-reader-mode = 
     .tooltiptext = Fara í lesham
 zen-site-data-header-screenshot = 
@@ -116,22 +111,7 @@ zen-site-data-setting-site-protection = Vörn gegn rakningu
 
 zen-site-data-panel-feature-callout-title = Ný miðstöð fyrir forritsauka, aðgangsheimildir og fleira
 zen-site-data-panel-feature-callout-subtitle = Smelltu á táknmyndina til að sýsla með stillingar vefsvæða, skoða öryggisupplýsingar, hafa aðgang að forritsaukum og framkvæma ýmsar algengar aðgerðir.
-zen-open-link-in-glance = 
-    .label = Opna tengil í Skyndisýn
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Uppfærslu lokið!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Nýtt á döfinni í { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Skoða útgáfuupplýsingar
-zen-sidebar-notification-donate-label = Styrkja { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Styrkja verkefnið með framlagi
-zen-sidebar-notification-restart-safe-mode-label = Bilaði eitthvað?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Endurræsa í öruggum ham
 zen-window-sync-migration-dialog-title = Samstilltu gluggana þína
 zen-window-sync-migration-dialog-message = Zen samstillir núna glugga á sama tæki, þannig að breytingar í einum glugga endurspeglast samstundis í hinum.
 zen-window-sync-migration-dialog-learn-more = Frekari upplýsingar

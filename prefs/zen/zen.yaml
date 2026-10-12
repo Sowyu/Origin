@@ -8,9 +8,6 @@
 - name: zen.tabs.vertical.right-side
   value: false
 
-- name: zen.tabs.rename-tabs
-  value: true
-
 - name: zen.tabs.essentials.max
   value: 12
 
@@ -31,12 +28,6 @@
 
 - name: zen.ctrlTab.show-pending-tabs
   value: false
-
-- name: zen.mediacontrols.enabled
-  value: true
-
-- name: zen.haptic-feedback.enabled
-  value: true
 
 - name: zen.startup.smooth-scroll-in-tabs
   value: true

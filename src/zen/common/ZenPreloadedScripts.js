@@ -5,35 +5,25 @@
 // prettier-ignore
 // eslint-disable-next-line no-lone-blocks
 {
-  ChromeUtils.defineESModuleGetters(this, {
-    gZenSpaceRoutingManager:
-      "resource:///modules/zen/spacerouting/ZenSpaceRoutingManager.sys.mjs",
-  });
-
-  Services.scriptloader.loadSubScript("chrome://browser/content/zen-components/ZenSpaceBookmarksStorage.js", this);
-
   let scripts = [
     "chrome://browser/content/ZenStartup.mjs",
     "resource:///modules/zen/ZenSpaceManager.mjs",
     "chrome://browser/content/zen-components/ZenCompactMode.mjs",
     "chrome://browser/content/ZenUIManager.mjs",
-    "chrome://browser/content/zen-components/ZenMods.mjs",
     "chrome://browser/content/zen-components/ZenKeyboardShortcuts.mjs",
     "chrome://browser/content/zen-components/ZenSessionStore.mjs",
-    "chrome://browser/content/zen-components/ZenMediaController.mjs",
-    "chrome://browser/content/zen-components/ZenGlanceManager.mjs",
     "chrome://browser/content/zen-components/ZenPinnedTabManager.mjs",
     "chrome://browser/content/zen-components/ZenViewSplitter.mjs",
     "chrome://browser/content/zen-components/ZenFolders.mjs",
     "chrome://browser/content/zen-components/ZenEmojiPicker.mjs",
-    "chrome://browser/content/zen-components/ZenLiveFoldersUI.mjs",
-    "chrome://browser/content/zen-components/ZenDownloadAnimation.mjs",
-    "resource:///modules/zen/share/ZenShareManager.mjs",
   ];
 
   for (let script of scripts) {
     ChromeUtils.importESModule(script, { global: "current" });
   }
+
+  // Origin: one app-wide timer that unloads idle background tabs.
+  ChromeUtils.importESModule("chrome://browser/content/zen-components/OriginTabUnloader.sys.mjs").OriginTabUnloader.init();
 
   let customZenElements = [
     ["zen-folder", "chrome://browser/content/zen-components/ZenFolder.mjs"],

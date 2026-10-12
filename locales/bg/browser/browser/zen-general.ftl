@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Промени етикета...
 tab-context-zen-edit-icon = 
     .label = Промени иконата...
-zen-themes-corrupted = Файлът с модификации на { -brand-short-name } е повреден. Те бяха нулирани до темата по подразбиране.
 zen-shortcuts-corrupted = Файлът с клавишни комбинации на { -brand-short-name } е повреден. Комбинациите бяха нулирани до настройките по подразбиране.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Добавяне на разширения
 zen-site-data-site-settings = 
     .label = Всички настройки за сайтове
-zen-site-data-header-share = 
-    .tooltiptext = Сподели тази страница
 zen-site-data-header-reader-mode = 
     .tooltiptext = Отвори режим на четене
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = Защита от проследяван
 
 zen-site-data-panel-feature-callout-title = Ново място за добавки, разширения и още
 zen-site-data-panel-feature-callout-subtitle = Натисни върху иконата, за да управляваш настройките на сайта, да видиш информацията за сигурността, да получиш достъп до разширенията и да извършваш често използвани действия.
-zen-open-link-in-glance = 
-    .label = Отвори връзката в Glance
-    .accesskey = Ж
-zen-sidebar-notification-updated-heading = Актуализацията е завършена!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Какво е ново в { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Виж бележките към изданието
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = Има проблем?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Рестартирай в безопасен режим
 zen-window-sync-migration-dialog-title = Синхронизирай прозорците си
 zen-window-sync-migration-dialog-message = Zen вече синхронизира прозорците на едно и също устройство, така че промените в един прозорец се отразяват незабавно във всички останали.
 zen-window-sync-migration-dialog-learn-more = Научи повече

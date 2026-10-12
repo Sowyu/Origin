@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Címke módosítása...
 tab-context-zen-edit-icon = 
     .label = Ikon módosítása...
-zen-themes-corrupted = A te { -brand-short-name } mod fájljaid károsodtak. Vissza lettek állítva az eredeti témára.
 zen-shortcuts-corrupted = A te { -brand-short-name } parancsikonok fájlod károsodott. Vissza lettek állítva az eredeti parancsikonokra.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Kiegészítő hozzáadása
 zen-site-data-site-settings = 
     .label = Minden webhelybeállítás
-zen-site-data-header-share = 
-    .tooltiptext = Oldal megosztása
 zen-site-data-header-reader-mode = 
     .tooltiptext = Olvasó módba lépés
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = Nyomkövetés védelem
 
 zen-site-data-panel-feature-callout-title = Új hely az add-onok, engedélyek és egyéb elemek számára
 zen-site-data-panel-feature-callout-subtitle = Kattints az ikonra a webhely beállításainak kezeléséhez, a biztonsági információk megtekintéséhez, a kiegészítők eléréséhez és a gyakori műveletek végrehajtásához.
-zen-open-link-in-glance = 
-    .label = Link megnyitása a bepillantóban
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Frissítés befejezve!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = { -brand-short-name } újdonságai
-zen-sidebar-notification-updated-tooltip = 
-    .title = Változások listájának megtekintése
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = Valami elromlott?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Újraindítás biztonságos módban
 zen-window-sync-migration-dialog-title = Tartsad szinkronban az ablakaid
 zen-window-sync-migration-dialog-message = A Zen mostantól szinkronizálja az ugyanazon eszközön található ablakokat, így az egyik ablakban végzett módosítások azonnal megjelennek a többiben is.
 zen-window-sync-migration-dialog-learn-more = Tudj meg többet

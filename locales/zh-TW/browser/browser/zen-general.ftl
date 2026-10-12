@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = 重新命名
 tab-context-zen-edit-icon = 
     .label = 變更圖示
-zen-themes-corrupted = 你的 { -brand-short-name } 模組文件已損壞，它們已重設為預設主題。
 zen-shortcuts-corrupted = 你的 { -brand-short-name } 快捷鍵文件已損壞。已被重設為預設值。
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification = 新的 URL 欄已啟用，你不再需要新增新分頁。<br/><br/>馬上打開新分頁來看看新的 URL 欄！
@@ -100,8 +97,6 @@ zen-site-data-get-addons =
     .label = 新增擴充套件
 zen-site-data-site-settings = 
     .label = 全部網站的設定
-zen-site-data-header-share = 
-    .tooltiptext = 分享此頁面
 zen-site-data-header-reader-mode = 
     .tooltiptext = 進入閱讀模式
 zen-site-data-header-screenshot = 
@@ -116,22 +111,7 @@ zen-site-data-setting-site-protection = 追蹤器保護
 
 zen-site-data-panel-feature-callout-title = 擴充套件、權限管理與其他功能的新家
 zen-site-data-panel-feature-callout-subtitle = 按這個圖示來管理網站設定、查看安全性資訊、存取擴充套件與執行基本動作。
-zen-open-link-in-glance = 
-    .label = 在 Glance 內開啟連結
-    .accesskey = G
-zen-sidebar-notification-updated-heading = 更新成功！
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = { -brand-short-name } 更新了什麼
-zen-sidebar-notification-updated-tooltip = 
-    .title = 查看版本資訊
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = 有東西壞掉了嗎？
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = 在安全模式下重新啟動
 zen-window-sync-migration-dialog-title = 讓您的視窗處於同步狀態
 zen-window-sync-migration-dialog-message = Zen現在能同步同裝置上的各個視窗，在某一視窗上的變動將會立即在其它視窗上反映出來。
 zen-window-sync-migration-dialog-learn-more = 了解更多

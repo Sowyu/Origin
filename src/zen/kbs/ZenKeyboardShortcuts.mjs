@@ -962,7 +962,12 @@ class nsZenKeyboardShortcutsVersioner {
     // Apply migrations and ensure defaults exist
     let out = this.fillDefaultIfNotPresent(this.migrateIfNeeded(data));
 
-    return out;
+    // Drop stored shortcuts whose Zen command no longer exists, such as
+    // the ones for Glance and the Library in a profile copied from Zen.
+    return out.filter(shortcut => {
+      const action = shortcut.getAction();
+      return !action?.startsWith("cmd_zen") || document.getElementById(action);
+    });
   }
 
   // eslint-disable-next-line complexity
@@ -1141,19 +1146,6 @@ class nsZenKeyboardShortcutsVersioner {
           "zen-toggle-pin-tab-shortcut"
         )
       );
-
-      // 2) Add shortcut to expand Glance into a full tab: Default Accel+O
-      data.push(
-        new KeyShortcut(
-          "zen-glance-expand",
-          "O",
-          "",
-          ZEN_OTHER_SHORTCUTS_GROUP,
-          nsKeyShortcutModifiers.fromObject({ accel: true }),
-          "cmd_zenGlanceExpand",
-          ""
-        )
-      );
     }
 
     if (version < 11) {
@@ -1318,22 +1310,6 @@ class nsZenKeyboardShortcutsVersioner {
           shortcut.setDisabled(true);
         }
       }
-    }
-
-    if (version < 21) {
-      // Migrate from version 20 to 21.
-      // Add shortcut to toggle the library
-      data.push(
-        new KeyShortcut(
-          "zen-library-toggle",
-          "L",
-          "",
-          ZEN_OTHER_SHORTCUTS_GROUP,
-          nsKeyShortcutModifiers.fromObject({ alt: true, shift: true }),
-          "cmd_zenToggleLibrary",
-          "zen-library-shortcut-toggle"
-        )
-      );
     }
 
     return data;

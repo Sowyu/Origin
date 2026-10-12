@@ -83,8 +83,7 @@
   height: 100%;
 }
 
-#browser,
-zen-library {
+#browser {
   --zen-min-toolbox-padding: 5px;
   @media (-moz-platform: macos) {
     --zen-min-toolbox-padding: 6px;
@@ -189,65 +188,6 @@ zen-library {
     padding-bottom: 0;
   }
 
-  & toolbarbutton {
-    appearance: none;
-    font-size: 10px;
-    font-weight: 500;
-    gap: 2px;
-    pointer-events: none;
-    padding-inline-start: 8px;
-    background: linear-gradient(
-        var(--zen-pinned-separator-color),
-        var(--zen-pinned-separator-color)
-      )
-      0 50% / calc(100% - 4px) 1px no-repeat;
-
-    & .toolbarbutton-icon,
-    & .toolbarbutton-text {
-      opacity: 0;
-      transition: opacity 0.15s;
-    }
-
-    #navigator-toolbox[zen-has-implicit-hover="true"] & {
-      pointer-events: auto;
-      background-image: none;
-
-      & .toolbarbutton-icon,
-      & .toolbarbutton-text {
-        opacity: 0.5;
-      }
-    }
-
-    &:hover .toolbarbutton-icon,
-    &:hover .toolbarbutton-text {
-      opacity: 1 !important;
-    }
-
-    :root:not([zen-sidebar-expanded="true"]) & {
-      display: none;
-    }
-
-    & .toolbarbutton-text {
-      display: flex;
-    }
-
-    & .toolbarbutton-icon {
-      width: 10px;
-      transition:
-        transform 0.15s ease-in-out,
-        opacity 0.15s;
-      transform: translateY(0);
-
-      @starting-style {
-        transform: translateY(-2px);
-      }
-    }
-
-    &:active:hover .toolbarbutton-icon {
-      transform: translateY(2px);
-    }
-  }
-
   :root[zen-unsynced-window="true"] & {
     display: none !important;
   }
@@ -256,8 +196,7 @@ zen-library {
 /* ==========================================================================
    Navigator Toolbox (Main Sidebar Container) Base Styles
    ========================================================================== */
-#navigator-toolbox,
-.zen-library-space-body {
+#navigator-toolbox {
   --border-radius-medium: 14px;
   --tab-border-radius: 8px;
 
@@ -347,7 +286,7 @@ zen-library {
       }
     }
 
-    :root[zen-sidebar-expanded="true"] &:not([zen-glance-tab]) {
+    :root[zen-sidebar-expanded="true"] & {
       margin-inline-start: var(--zen-folder-indent) !important;
     }
 
@@ -398,81 +337,11 @@ zen-library {
         width: 3px !important;
       }
     }
-
-    /* --- Glance Tab Styles (Nested .tabbrowser-tab) --- */
-    & .tabbrowser-tab {
-      pointer-events: none;
-      margin: 0 0 0 4px !important;
-      --toolbarbutton-padding-inner: 0;
-      --border-radius-medium: 8px;
-      width: var(--size-item-medium);
-      height: var(--size-item-medium);
-      --tab-min-height: 24px;
-      --tab-min-width: 24px;
-
-      & .tab-background {
-        background: var(--zen-toolbar-element-bg) !important;
-        margin-block: 0 !important;
-        margin-inline: 0 !important;
-        box-shadow: none !important;
-        border-radius: calc(var(--border-radius-medium) - 2px);
-      }
-
-      & .tab-content {
-        padding: 0 5px;
-      }
-
-      & label,
-      & .tab-close-button,
-      & .tab-reset-button,
-      & .tab-reset-pin-button {
-        display: none !important;
-      }
-
-      /* Style glance tab icon */
-      & .tab-icon-image {
-        --toolbarbutton-padding-inner: 0 !important;
-        width: 14px;
-        height: 14px;
-      }
-
-      & .tab-audio-button {
-        display: none !important;
-      }
-
-      &[soundplaying]:not([muted]) .zen-media-notes {
-        display: block;
-        left: 50%;
-        width: 110%;
-        translate: -50% 0;
-        --zen-media-notes-animation: zen-note-sprite;
-      }
-    }
-
-    /* --- Essentials Glance Tab Specifics (Floating) --- */
-    /* Additional styles for glance tabs in "essential" mode */
-    &[zen-essential="true"] .tabbrowser-tab {
-      position: absolute;
-      top: 0;
-      right: 0;
-
-      --tab-collapsed-width: 34px;
-      --tab-min-height: 16px;
-      width: var(--tab-collapsed-width) !important;
-      z-index: 1;
-      pointer-events: none;
-
-      & .tab-background {
-        background: light-dark(rgb(249, 249, 249), rgb(63, 63, 63)) !important;
-        border: 2px solid light-dark(rgba(0, 0, 0, 0.4), rgba(255, 255, 255, 0.4));
-      }
-    }
   }
 }
 
 @media (-moz-platform: macos) {
-  #zen-sidebar-foot-buttons,
-  #zen-library-footer {
+  #zen-sidebar-foot-buttons {
     --zen-toolbar-button-size: 20px;
   }
 }
@@ -542,7 +411,7 @@ zen-library {
   }
 }
 
-:is(#navigator-toolbox, .zen-library-space-body)[zen-sidebar-expanded="true"] {
+#navigator-toolbox[zen-sidebar-expanded="true"] {
   --zen-toolbox-min-width: 163px;
 
   padding: var(--zen-toolbox-padding);

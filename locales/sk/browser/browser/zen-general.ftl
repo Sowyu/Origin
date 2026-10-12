@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Zmeniť Označenie...
 tab-context-zen-edit-icon = 
     .label = Zmeniť Ikonu...
-zen-themes-corrupted = Váš súbor módov { -brand-short-name } je poškodený. Témy boli resetované na predvolené.
 zen-shortcuts-corrupted = Váš súbor skratiek { -brand-short-name } je poškodený. Skratky boli resetované na predvolené.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification = Nový panel adries bol aktivovaný, takže stránky novej karty už nie sú potrebné.<br/><br/>Skúste otvoriť novú kartu a pozrite si nový panel adries v akcii!
@@ -100,8 +97,6 @@ zen-site-data-get-addons =
     .label = Pridať Rozšírenia
 zen-site-data-site-settings = 
     .label = Všetky Nastavenia Webov
-zen-site-data-header-share = 
-    .tooltiptext = Zdieľať Túto Stránku
 zen-site-data-header-reader-mode = 
     .tooltiptext = Prejsť do Režimu Čítačky
 zen-site-data-header-screenshot = 
@@ -116,22 +111,7 @@ zen-site-data-setting-site-protection = Ochrana pred Sledovaním
 
 zen-site-data-panel-feature-callout-title = Nové miesto pre doplnky, povolenia a ďalšie funkcie
 zen-site-data-panel-feature-callout-subtitle = Kliknutím na túto ikonu môžete spravovať nastavenia webu, zobraziť informácie o zabezpečení, pristupovať k rozšíreniam a vykonávať bežné akcie.
-zen-open-link-in-glance = 
-    .label = Otvoriť odkaz v Glance
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Aktualizácia Dokončená!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Čo je nové v { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Zobraziť Poznámky k Vydaniu
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = Niečo sa pokazilo?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Reštartovať v Núdzovom Režime
 zen-window-sync-migration-dialog-title = Majte svoje okná synchronizované
 zen-window-sync-migration-dialog-message = Zen teraz synchronizuje okná v rámci jedného zariadenia, takže zmeny v jednom okne sa okamžite prejavia vo všetkých ostatných.
 zen-window-sync-migration-dialog-learn-more = Dozvedieť sa Viac

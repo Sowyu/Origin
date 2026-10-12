@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Alterar etiqueta...
 tab-context-zen-edit-icon = 
     .label = Alterar ícone...
-zen-themes-corrupted = O seu ficheiro de modificações do { -brand-short-name } está corrompido. Elas foram redefinidas como iguais às do tema padrão.
 zen-shortcuts-corrupted = O seu ficheiro de atalhos do { -brand-short-name } está corrompido. Eles foram redefinidos para os atalhos padrão.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Adicionar Extensões
 zen-site-data-site-settings = 
     .label = Todas as Definições do Site
-zen-site-data-header-share = 
-    .tooltiptext = Partilhar Esta Página
 zen-site-data-header-reader-mode = 
     .tooltiptext = Entrar no Modo Leitura
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = Proteção contra rastreio
 
 zen-site-data-panel-feature-callout-title = Uma nova casa para extensões, permissões e mais
 zen-site-data-panel-feature-callout-subtitle = Clique no ícone para gerir definições do site, ver informações de segurança, extensões de acesso e executar ações comuns.
-zen-open-link-in-glance = 
-    .label = Abrir Link no Glance
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Atualização Concluída!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = O que há de novo no { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Ver Notas de Lançamento
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = Falhou alguma coisa?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Reiniciar em Modo de Segurança
 zen-window-sync-migration-dialog-title = Mantenha As Suas Janelas Sincronizadas
 zen-window-sync-migration-dialog-message = Agora, o Zen sincroniza as janelas no dispositivo, pelo que alterações numa janela são refletidas instantaneamente nas outras.
 zen-window-sync-migration-dialog-learn-more = Saber Mais

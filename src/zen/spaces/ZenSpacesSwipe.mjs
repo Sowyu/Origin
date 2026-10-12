@@ -14,15 +14,8 @@ ChromeUtils.defineLazyGetter(lazy, "toolbarBackgroundElement", () => {
   return document.getElementById("zen-toolbar-background");
 });
 
-ChromeUtils.defineESModuleGetters(
-  lazy,
-  { ZenLibrary: "moz-src:///zen/library/ZenLibrary.mjs" },
-  { global: "current" }
-);
-
 export class ZenSpacesSwipe {
   static ACTIONS = {
-    LIBRARY: "library",
     ADD_SPACE: "add-space",
   };
 
@@ -46,7 +39,7 @@ export class ZenSpacesSwipe {
     /** One of ACTIONS, or null while the swipe still only moves spaces. */
     action: null,
     /** Which of ACTIONS this swipe is allowed to turn into. */
-    allowed: { library: false, addSpace: false },
+    allowed: { addSpace: false },
   };
 
   constructor() {
@@ -119,7 +112,7 @@ export class ZenSpacesSwipe {
 
     if (
       event.target.closest(
-        '#urlbar[zen-floating-urlbar="true"], #zen-workspaces-button, #zen-library-download-list'
+        '#urlbar[zen-floating-urlbar="true"], #zen-workspaces-button'
       )
     ) {
       return;
@@ -164,12 +157,10 @@ export class ZenSpacesSwipe {
     this.#toggleSwipeGestureAttr(true);
     document.addEventListener("popupshown", this, { once: true });
 
-    lazy.ZenLibrary.swipeReset();
     this.#addSwipe.swipeReset();
 
     event.preventDefault();
     event.stopPropagation();
-    const libraryOpen = lazy.ZenLibrary.isLibraryOpen;
     this.#swipeState = {
       isGestureActive: true,
       lastDelta: 0,
@@ -177,15 +168,11 @@ export class ZenSpacesSwipe {
       deltaMultiplier: Services.prefs.getIntPref(
         "zen.workspaces.swipe-actions.delta-multiplier"
       ),
-      action: libraryOpen ? ZenSpacesSwipe.ACTIONS.LIBRARY : null,
+      action: null,
       allowed: {
-        library: libraryOpen || lazy.ZenLibrary.readySwipeOpenLibrary(),
         addSpace: this.#addSwipe.readySwipeAddSpace(),
       },
     };
-    if (libraryOpen) {
-      lazy.ZenLibrary.startSwipe();
-    }
     this.#applySwipeThreshold(event);
   }
 
@@ -227,10 +214,6 @@ export class ZenSpacesSwipe {
     this.#applySwipeThreshold(event);
 
     switch (this.#swipeState.action) {
-      case ZenSpacesSwipe.ACTIONS.LIBRARY:
-        lazy.ZenLibrary.swipeProgress(translateX / stripWidth);
-        ws._organizeWorkspaceStripLocations(currentWorkspace, true, 0);
-        return;
       case ZenSpacesSwipe.ACTIONS.ADD_SPACE:
         this.#addSwipe.swipeProgress(event.delta);
         return;
@@ -251,14 +234,11 @@ export class ZenSpacesSwipe {
       return;
     }
     const { allowed } = this.#swipeState;
-    const towardsLibrary = lazy.ZenLibrary.libraryOnRight
+    const towardsStart = gZenVerticalTabsManager._prefsRightSide
       ? translateX < 0
       : translateX > 0;
 
-    if (allowed.library && towardsLibrary) {
-      this.#swipeState.action = ZenSpacesSwipe.ACTIONS.LIBRARY;
-      lazy.ZenLibrary.startSwipe();
-    } else if (allowed.addSpace && !towardsLibrary) {
+    if (allowed.addSpace && !towardsStart) {
       this.#swipeState.action = ZenSpacesSwipe.ACTIONS.ADD_SPACE;
       this.#addSwipe.startSwipe();
     }
@@ -280,9 +260,6 @@ export class ZenSpacesSwipe {
     const direction = ws.naturalScroll ? -1 : 1;
 
     switch (this.#swipeState.action) {
-      case ZenSpacesSwipe.ACTIONS.LIBRARY:
-        lazy.ZenLibrary.stopSwipe(rawDirection * direction);
-        return;
       case ZenSpacesSwipe.ACTIONS.ADD_SPACE:
         this.#addSwipe.endSwipe();
         return;
@@ -295,9 +272,6 @@ export class ZenSpacesSwipe {
     const ws = gZenWorkspaces;
 
     switch (this.#swipeState.action) {
-      case ZenSpacesSwipe.ACTIONS.LIBRARY:
-        lazy.ZenLibrary.swipeAnimationEnd();
-        break;
       case ZenSpacesSwipe.ACTIONS.ADD_SPACE:
         this.#addSwipe.onSwipeAnimationEnd();
         break;
@@ -309,7 +283,7 @@ export class ZenSpacesSwipe {
       lastDelta: 0,
       direction: null,
       action: null,
-      allowed: { library: false, addSpace: false },
+      allowed: { addSpace: false },
     };
 
     this.#toggleSwipeGestureAttr(false);

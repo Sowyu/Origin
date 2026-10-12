@@ -173,11 +173,6 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
     const tab = event.target;
     if (tab.group?.hasAttribute("split-view-group")) {
       gBrowser.explicitUnloadTabs(tab.group.tabs);
-      for (const t of tab.group.tabs) {
-        if (t.glanceTab) {
-          gBrowser.explicitUnloadTabs([t.glanceTab]);
-        }
-      }
     }
   }
 
@@ -353,18 +348,14 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
       (this._lastOpenedTab.getAttribute("zen-workspace-id") !==
         draggedTab.getAttribute("zen-workspace-id") &&
         !this._lastOpenedTab.hasAttribute("zen-essential") &&
-        !draggedTab.hasAttribute("zen-essential")) ||
-      this._lastOpenedTab.hasAttribute("zen-live-folder-item-id")
+        !draggedTab.hasAttribute("zen-essential"))
     ) {
       this._lastOpenedTab = gBrowser.selectedTab;
     }
     if (!draggedTab || this._canDrop || this._hasAnimated || this.fakeBrowser) {
       return;
     }
-    if (
-      draggedTab.splitView ||
-      draggedTab.hasAttribute("zen-live-folder-item-id")
-    ) {
+    if (draggedTab.splitView) {
       return;
     }
     const currentView = this._data.find(group =>
@@ -412,8 +403,6 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
     }
     const oldTab = this._lastOpenedTab;
     this._canDrop = true;
-    // eslint-disable-next-line mozilla/valid-services
-    Services.zen.playHapticFeedback();
     this._draggingTab = draggedTab;
     gBrowser.selectedTab = oldTab;
     this._hasAnimated = true;
@@ -1186,8 +1175,6 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
     document.l10n.setAttributes(splitTabCommand, "tab-zen-split-tabs", {
       tabCount: isExistingSplitView ? -1 : selectedTabs.length,
     });
-    document.getElementById("context_zenShareSplitView").hidden =
-      !gZenShareManager.enabled || !isExistingSplitView;
     if (isExistingSplitView) {
       splitTabCommand.removeAttribute("hidden");
       return;
@@ -1208,10 +1195,6 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
                 data-lazy-l10n-id="tab-zen-split-tabs"
                 data-l10n-args='{"tabCount": 1}'
                 command="cmd_zenSplitViewContextMenu"/>
-      <menuitem id="context_zenShareSplitView"
-                data-lazy-l10n-id="zen-share-split-view"
-                hidden="true"
-                command="cmd_zenCtxShareSplitView"/>
     `);
     document.getElementById("context_moveTabToSplitView").before(element);
   }
@@ -1246,11 +1229,8 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
       window.gContextMenu.mediaURL ||
       window.gContextMenu.contentData.docLocation ||
       window.gContextMenu.target.ownerDocument.location.href;
-    const currentTab = gZenGlanceManager.getTabOrGlanceParent(
-      window.gBrowser.selectedTab
-    );
+    const currentTab = window.gBrowser.selectedTab;
     const newTab = this.openAndSwitchToTab(url, {
-      skipRoute: true,
       inBackground: false,
       triggeringPrincipal: window.gContextMenu.principal,
     });
@@ -1261,33 +1241,19 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
   }
 
   /**
-   * Shares the split view of the context tab.
-   */
-  contextShareSplitView() {
-    const group = TabContextMenu.contextTab?.group;
-    if (group?.hasAttribute("split-view-group")) {
-      gZenShareManager.shareSplitView(group);
-    }
-  }
-
-  /**
    * Splits the selected tabs.
    *
-   * @param {Tab|null} otherTabHint - An optional hint for another tab to split with (used for glance tabs).
+   * @param {Tab|null} otherTabHint - An optional hint for another tab to split with.
    */
   contextSplitTabs(otherTabHint = null) {
     let tabs;
-    let currentTab = gZenGlanceManager.getTabOrGlanceParent(
-      TabContextMenu.contextTab || gBrowser.selectedTab
-    );
+    let currentTab = TabContextMenu.contextTab || gBrowser.selectedTab;
     if (currentTab.multiselected) {
       tabs = gBrowser.selectedTabs;
     } else if (!currentTab.selected && !currentTab.splitView) {
       tabs = [
         currentTab,
-        ...gBrowser.selectedTabs.filter(
-          t => t !== currentTab && !t.hasAttribute("zen-glance-tab")
-        ),
+        ...gBrowser.selectedTabs.filter(t => t !== currentTab),
       ];
     } else {
       tabs = [currentTab];
@@ -1337,24 +1303,9 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
   onLocationChange(browser) {
     this.disableTabRearrangeView();
     let tab = window.gBrowser.getTabForBrowser(browser);
-    const ignoreSplit = tab.hasAttribute("zen-dont-split-glance");
-    tab.removeAttribute("zen-dont-split-glance");
-    let isGlanceTab = false;
-    if (tab.hasAttribute("zen-glance-tab") && !ignoreSplit) {
-      // Extract from parent node so we are not selecting the wrong (current) tab
-      tab = tab.parentNode.closest(".tabbrowser-tab");
-      isGlanceTab = true;
-      if (!tab) {
-        console.error("Tab not found for zen-glance-tab");
-      }
-    }
     if (tab) {
       this.updateSplitView(tab);
       tab.linkedBrowser.docShellIsActive = true;
-      if (isGlanceTab) {
-        // See issues https://github.com/zen-browser/desktop/issues/11641
-        this.removeSplitters();
-      }
     }
     this._maybeRemoveFakeBrowser();
     {
@@ -1398,15 +1349,8 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
     const thereIsOneEssential = tabs.some(tab =>
       tab.hasAttribute("zen-essential")
     );
-    const thereIsOneLiveFolder = tabs.some(tab =>
-      tab.hasAttribute("zen-live-folder-item-id")
-    );
 
-    if (
-      thereIsOneEssential ||
-      (thereIsOnePinned && !allArePinned) ||
-      thereIsOneLiveFolder
-    ) {
+    if (thereIsOneEssential || (thereIsOnePinned && !allArePinned)) {
       for (let i = 0; i < tabs.length; i++) {
         const tab = tabs[i];
         if (tab.pinned) {
@@ -1439,8 +1383,6 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
       // TODO: Add support for splitting essential tabs
       tabs = tabs
         .filter(t => !t.hidden && !t.hasAttribute("zen-empty-tab"))
-        // use glance parent tab instead of glance tab
-        .map(t => gZenGlanceManager.getTabOrGlanceParent(t))
         // remove duplicates
         .filter((t, i, arr) => arr.indexOf(t) === i);
       if (tabs.length < 2 || tabs.length > this.MAX_TABS) {
@@ -2203,9 +2145,7 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
       return false;
     }
 
-    let droppedOnTab = gZenGlanceManager.getTabOrGlanceParent(
-      gBrowser.getTabForBrowser(browser)
-    );
+    let droppedOnTab = gBrowser.getTabForBrowser(browser);
     if (droppedOnTab === this._draggingTab) {
       this.createEmptySplit(dropSide);
       return true;
@@ -2523,12 +2463,6 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
     document
       .getElementById("cmd_zenSplitViewLinkInNewTab")
       .toggleAttribute("disabled", shouldBeDisabled);
-    const splitGlanceCommand = document.getElementById("cmd_zenGlanceSplit");
-    if (shouldBeDisabled) {
-      splitGlanceCommand.setAttribute("disabled", true);
-    } else {
-      splitGlanceCommand.removeAttribute("disabled");
-    }
   }
 
   canOpenLinkInSplitView() {

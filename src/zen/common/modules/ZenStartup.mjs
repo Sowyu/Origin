@@ -2,13 +2,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import checkForZenUpdates, {
-  createWindowUpdateAnimation,
-  playWindowSweepAnimation,
-} from "chrome://browser/content/ZenUpdates.mjs";
+import { playWindowSweepAnimation } from "chrome://browser/content/ZenUpdates.mjs";
 
 class ZenStartup {
-  #watermarkIgnoreElements = ["zen-toast-container", "zen-browser-background"];
   #hasInitializedLayout = false;
 
   isReady = false;
@@ -17,15 +13,7 @@ class ZenStartup {
   });
 
   init() {
-    this.openWatermark();
     this.#zenInitBrowserLayout();
-  }
-
-  get #shouldUseWatermark() {
-    return (
-      Services.prefs.getBoolPref("zen.watermark.enabled", false) &&
-      gZenWorkspaces.shouldHaveWorkspaces
-    );
   }
 
   #zenInitBrowserLayout() {
@@ -56,8 +44,6 @@ class ZenStartup {
 
       gZenWorkspaces.init().then(() => {
         gZenUIManager.init();
-        this.#initUIComponents();
-        this.#checkForWelcomePage();
       });
     } catch (e) {
       console.error("ZenThemeModifier: Error initializing browser layout", e);
@@ -91,110 +77,16 @@ class ZenStartup {
       // A bit of a hack to make sure the tabs toolbar is updated.
       // Just in case we didn't get the right size.
       gZenUIManager.updateTabsToolbar();
-      this.closeWatermark();
+      window.requestAnimationFrame(() => {
+        window.dispatchEvent(new window.Event("resize")); // To recalculate the layout
+      });
       document
         .getElementById("tabbrowser-arrowscrollbox")
         .setAttribute("orient", "vertical");
       this.isReady = true;
       this.promiseInitializedResolve();
       delete this.promiseInitializedResolve;
-
-      setTimeout(() => {
-        // Wait for the natural PlacesToolbar rebuild before invalidating, so
-        // the two async rebuilds don't interleave and duplicate bookmarks.
-        // promiseRebuilt() returns undefined when no rebuild is in flight.
-        const rebuilt =
-          document
-            .getElementById("PlacesToolbar")
-            ?._placesView?.promiseRebuilt() ?? Promise.resolve();
-        rebuilt
-          .catch(console.error)
-          .then(() => gZenWorkspaces._invalidateBookmarkContainers());
-      });
     });
-  }
-
-  openWatermark() {
-    if (!this.#shouldUseWatermark) {
-      document.documentElement.removeAttribute("zen-before-loaded");
-      return;
-    }
-    for (let elem of document.querySelectorAll(
-      `#browser > *:not(${this.#watermarkIgnoreElements.map(id => "#" + id).join(", ")}), #urlbar`
-    )) {
-      elem.style.opacity = 0;
-    }
-  }
-
-  closeWatermark() {
-    document.documentElement.removeAttribute("zen-before-loaded");
-    if (this.#shouldUseWatermark) {
-      let elementsToIgnore = this.#watermarkIgnoreElements
-        .map(id => "#" + id)
-        .join(", ");
-      gZenUIManager.motion
-        .animate(
-          "#browser > *:not(" +
-            elementsToIgnore +
-            "), #urlbar, #tabbrowser-tabbox > *",
-          {
-            opacity: [0, 1],
-          },
-          {
-            duration: 0.1,
-          }
-        )
-        .then(() => {
-          for (let elem of document.querySelectorAll(
-            "#browser > *, #urlbar, #tabbrowser-tabbox > *"
-          )) {
-            elem.style.removeProperty("opacity");
-          }
-        });
-    }
-    window.requestAnimationFrame(() => {
-      window.dispatchEvent(new window.Event("resize")); // To recalculate the layout
-    });
-  }
-
-  #initUIComponents() {
-    const kUIComponents = ["ZenProgressBar", "ZenSpaceRoutingNavigation"];
-    for (let component of kUIComponents) {
-      const module = ChromeUtils.importESModule(
-        "resource:///modules/zen/ui/" + component + ".sys.mjs"
-      );
-      new module[component](window);
-    }
-  }
-
-  #checkForWelcomePage() {
-    const kWelcomeScreenSeenPref = "zen.welcome-screen.seen";
-    if (Services.env.get("MOZ_HEADLESS")) {
-      Services.prefs.setBoolPref(kWelcomeScreenSeenPref, true);
-      return;
-    }
-    if (!Services.prefs.getBoolPref(kWelcomeScreenSeenPref, false)) {
-      Services.prefs.setBoolPref(kWelcomeScreenSeenPref, true);
-      Services.prefs.setStringPref(
-        "zen.updates.last-build-id",
-        Services.appinfo.appBuildID
-      );
-      Services.prefs.setStringPref(
-        "zen.updates.last-version",
-        Services.appinfo.version
-      );
-      Services.scriptloader.loadSubScript(
-        "chrome://browser/content/zen-components/ZenWelcome.mjs",
-        window
-      );
-    } else {
-      this.#createUpdateAnimation();
-    }
-  }
-
-  async #createUpdateAnimation() {
-    checkForZenUpdates();
-    return await createWindowUpdateAnimation();
   }
 
   /**

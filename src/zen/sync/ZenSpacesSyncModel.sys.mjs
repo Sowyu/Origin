@@ -9,8 +9,6 @@ const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
   ZenSessionStore: "resource:///modules/zen/ZenSessionManager.sys.mjs",
-  ZenLiveFoldersManager:
-    "resource:///modules/zen/ZenLiveFoldersManager.sys.mjs",
   ContextualIdentityService:
     "moz-src:///toolkit/components/contextualidentity/ContextualIdentityService.sys.mjs",
 });
@@ -189,6 +187,7 @@ class nsZenSpacesSyncModel {
           data.version = STORE_VERSION;
           data.uploaded ||= {};
           data.containers ||= {};
+          data.foreignLive ||= {};
           // The container map used to be keyed by guid. It is keyed by
           // userContextId now so that registering a guid replaces any
           // previous one for the same container. Flip old stores over
@@ -300,7 +299,6 @@ class nsZenSpacesSyncModel {
       tabData &&
       tabData.zenSyncId &&
       !tabData.zenIsEmpty &&
-      !tabData.zenIsGlance &&
       !tabData.zenLiveFolderItemId
     );
   }
@@ -549,7 +547,7 @@ class nsZenSpacesSyncModel {
     this.#collectHeldIds(ctx, sidebar, pending);
     this.#projectContainers(map);
     this.#projectSpaces(map, ctx, spaces);
-    this.#projectFolders(map, ctx, pending);
+    this.#projectFolders(map, ctx);
     this.#projectTabs(map, ctx);
     this.#projectSplits(map, ctx);
     this.#projectLayout(map, ctx, spaces);
@@ -634,21 +632,9 @@ class nsZenSpacesSyncModel {
     }
   }
 
-  #projectFolders(map, ctx, pending) {
+  #projectFolders(map, ctx) {
     for (const folder of ctx.folders) {
       const fid = folder.id;
-      let live = null;
-      if (folder.isLiveFolder) {
-        try {
-          live = lazy.ZenLiveFoldersManager.getSyncableFolderData(fid);
-        } catch (e) {
-          console.error("ZenSpacesSync: failed to project live folder", e);
-        }
-        if (!live) {
-          pending.add(fid);
-          continue;
-        }
-      }
       map.set(fid, {
         kind: RECORD_KINDS.FOLDER,
         data: {
@@ -657,7 +643,9 @@ class nsZenSpacesSyncModel {
           icon: folder.userIcon || null,
           workspaceUuid: folder.workspaceId || null,
           parentFolderId: folder.parentId || null,
-          live,
+          // Origin has no live folders. It keeps the config a Zen client sent
+          // and passes it back unchanged, so the folder stays live there.
+          live: this.#data().foreignLive?.[fid] ?? null,
           children: this.#childSequence(ctx, { folder: fid }),
         },
       });
@@ -706,7 +694,7 @@ class nsZenSpacesSyncModel {
 
   /**
    * Ids that are locally present but deliberately not projected this cycle
-   * (live folders whose provider config isn't available yet). The diff must
+   * (items held back by the normal-tabs option). The diff must
    * not read their absence as a deletion.
    */
   #pendingIds() {
@@ -868,6 +856,11 @@ class nsZenSpacesSyncModel {
       delete data.uploaded[id];
     } else {
       data.uploaded[id] = recordDigest(cleartext.kind, cleartext.data);
+    }
+    if (cleartext?.kind === RECORD_KINDS.FOLDER && cleartext.data?.live) {
+      data.foreignLive[id] = cleartext.data.live;
+    } else {
+      delete data.foreignLive[id];
     }
     this.#appliedStamp.set(id, stamp);
     syncLog(

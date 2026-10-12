@@ -383,12 +383,6 @@ class nsZenWindowSync {
 
   handleEvent(aEvent) {
     const window = aEvent.currentTarget.documentGlobal ?? aEvent.currentTarget;
-    // The library builds copies of tabs and folders that fire these same
-    // events while being built. Their ids are suffixed with "-copy" (see
-    // ZenLibrarySpacesSection#renameIds), so never sync anything from one.
-    if (aEvent.target?.id?.endsWith("-copy")) {
-      return;
-    }
     if (
       !window.gZenStartup.isReady ||
       !window.gZenWorkspaces?.shouldHaveWorkspaces ||
@@ -559,35 +553,6 @@ class nsZenWindowSync {
       );
       this.#syncItemPosition(aOriginalItem, aTargetItem, aWindow);
     }
-    if (aOriginalItem.hasAttribute("zen-live-folder-item-id")) {
-      this.#maybeSyncAttributeChange(
-        aOriginalItem,
-        aTargetItem,
-        "zen-live-folder-item-id"
-      );
-      this.#maybeSyncAttributeChange(
-        aOriginalItem,
-        aTargetItem,
-        "zen-show-sublabel"
-      );
-      this.#syncTabSubtitle(aWindow, aOriginalItem, aTargetItem);
-    } else if (aTargetItem.hasAttribute("zen-live-folder-item-id")) {
-      aTargetItem.removeAttribute("zen-live-folder-item-id");
-      if (aTargetItem.hasAttribute("zen-show-sublabel")) {
-        this.#syncTabSubtitle(aWindow, aOriginalItem, aTargetItem);
-        aTargetItem.removeAttribute("zen-show-sublabel");
-      }
-    }
-  }
-
-  #syncTabSubtitle(aWindow, aOriginalItem, aTargetItem) {
-    const subLabel = aOriginalItem.getAttribute("zen-show-sublabel");
-    const targetLabel = aTargetItem.querySelector(".zen-tab-sublabel");
-    if (targetLabel) {
-      aWindow.document.l10n.setArgs(targetLabel, {
-        tabSubtitle: subLabel || "zen-default-pinned",
-      });
-    }
   }
 
   /**
@@ -606,10 +571,6 @@ class nsZenWindowSync {
 
     const isGroup = gBrowser.isTabGroup(aOriginalItem);
     const isTab = !isGroup;
-
-    if (aOriginalItem.hasAttribute("zen-glance-tab")) {
-      return;
-    }
 
     if (isTab) {
       if (originalIsEssential !== targetIsEssential) {

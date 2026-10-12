@@ -407,8 +407,6 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
     }
     if (previousTexture !== this.currentTexture) {
       this.updateCurrentWorkspace();
-      /* eslint-disable mozilla/valid-services */
-      Services.zen.playHapticFeedback();
     }
   }
 
@@ -1228,11 +1226,6 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
 
   onOpacityChange(event) {
     this.currentOpacity = parseFloat(event.target.value);
-    // If we reached a whole number (e.g., 0.1, 0.2, etc.), send a haptic feedback.
-    if (Math.round(this.currentOpacity * 10) !== this._lastHapticFeedback) {
-      Services.zen.playHapticFeedback();
-      this._lastHapticFeedback = Math.round(this.currentOpacity * 10);
-    }
     this.updateCurrentWorkspace();
   }
 

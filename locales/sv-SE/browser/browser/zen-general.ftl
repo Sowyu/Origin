@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Redigera…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Ändra etikett...
 tab-context-zen-edit-icon = 
     .label = Ändra ikon...
-zen-themes-corrupted = Din { -brand-short-name } modds-fil är skadad. De har återställts till standardtemat.
 zen-shortcuts-corrupted = Din { -brand-short-name } Genvägsfil är korrupt. De har återställts till standardgenvägarna.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Lägg till tillägg
 zen-site-data-site-settings = 
     .label = Alla webbplatsinställningar
-zen-site-data-header-share = 
-    .tooltiptext = Dela denna sida
 zen-site-data-header-reader-mode = 
     .tooltiptext = Öppna läsläge
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = Spårningsskydd
 
 zen-site-data-panel-feature-callout-title = Ett nytt hem för tillägg, behörigheter och mer
 zen-site-data-panel-feature-callout-subtitle = Klicka på ikonen för att hantera webbplatsinställningar, visa säkerhetsinformation, öppna tillägg och utföra vanliga åtgärder.
-zen-open-link-in-glance = 
-    .label = Öppna länk i Glance
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Uppdatering slutförd!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Vad är nytt i { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Visa versionsfakta
-zen-sidebar-notification-donate-label = Stöd { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donera till projektet
-zen-sidebar-notification-restart-safe-mode-label = Har något gått sönder?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Starta om i felsäkert läge
 zen-window-sync-migration-dialog-title = Behåll dina fönster i Sync
 zen-window-sync-migration-dialog-message = Zen synkroniserar nu fönster på samma enhet, så ändringar i ett fönster återspeglas direkt i de andra.
 zen-window-sync-migration-dialog-learn-more = Läs mer

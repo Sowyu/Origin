@@ -21,22 +21,6 @@ sync-engine-workspaces =
     .tooltiptext = Sync your workspaces across devices
     .accesskey = W
 
-zen-glance-title = Glance
-zen-glance-header = General settings for glance
-zen-glance-description = Get a quick overview of your links without opening them in a new tab
-zen-glance-trigger-label = Trigger method
-zen-glance-enabled =
-    .label = Enable Glance
-
-zen-glance-trigger-ctrl-click =
-    .label = Ctrl + Click
-zen-glance-trigger-alt-click =
-    .label = Alt + Click
-zen-glance-trigger-shift-click =
-    .label = Shift + Click
-zen-glance-trigger-meta-click =
-    .label = Meta (Command) + Click
-
 zen-look-and-feel-compact-view-header = Show in compact view
 zen-look-and-feel-compact-view-description = Only show the toolbars you use!
 zen-look-and-feel-compact-view-enabled =
@@ -47,11 +31,6 @@ zen-look-and-feel-compact-view-top-toolbar =
 
 zen-look-and-feel-compact-toolbar-flash-popup =
     .label = Briefly make the toolbar popup when switching or opening new tabs in compact mode
-
-zen-look-and-feel-window-drag-header = Window dragging
-zen-look-and-feel-window-drag-description = Move the window by dragging empty space at the top of websites, just like the titlebar.
-zen-window-drag-enabled =
-    .label = Allow dragging the window from web pages
 
 pane-zen-tabs-title = Tab Management
 category-zen-workspaces =
@@ -138,46 +117,8 @@ zen-vertical-tabs-expand-tabs-on-hover = Expand Tabs on Hover (Won't work on com
 zen-vertical-tabs-expand-tabs-header = How to expand tabs
 zen-vertical-tabs-expand-tabs-description = Choose how to expand tabs in the sidebar
 
-zen-theme-marketplace-header = Zen Mods
-zen-theme-disable-all-enabled =
-    .title = Disable all mods
-zen-theme-disable-all-disabled =
-    .title = Enable all mods
-zen-theme-marketplace-description = Find and install mods from the store.
-zen-theme-marketplace-remove-button =
-    .label = Remove mod
-zen-theme-marketplace-check-for-updates-button =
-    .label = Check for Updates
-zen-theme-marketplace-import-button=
-    .label = Import mods
-zen-theme-marketplace-export-button =
-    .label = Export Mods
-zen-theme-marketplace-import-success = Mods imported successfully
-zen-theme-marketplace-import-failure = There was an error importing the mods
-zen-theme-marketplace-export-success = Mods exported successfully
-zen-theme-marketplace-export-failure = There was an error exporting the mods
-zen-theme-marketplace-updates-success = Mods updated successfully
-zen-theme-marketplace-updates-failure = Couldn't find any updates!
-zen-theme-marketplace-toggle-enabled-button =
-    .title = Disable mod
-zen-theme-marketplace-toggle-disabled-button =
-    .title = Enable mod
-zen-theme-marketplace-remove-confirmation = Are you sure you want to remove this mod?
-zen-theme-marketplace-close-modal = Close
-zen-theme-marketplace-theme-header-title =
-    .title = CSS Selector: { $name }
-zen-theme-marketplace-dropdown-default-label =
-    .label = None
-zen-theme-marketplace-input-default-placeholder =
-    .placeholder = Type something...
-pane-zen-marketplace-title = Zen Mods
-zen-themes-auto-update =
-   .label = Automatically update installed mods on startup
-
 zen-settings-workspaces-force-container-tabs-to-workspace =
     .label = Switch to workspace where container is set as default when opening container tabs
-
-zen-theme-marketplace-link = Visit Store
 
 zen-dark-theme-styles-header = Dark Theme Styles
 zen-dark-theme-styles-description = Customize the dark theme to your liking
@@ -190,7 +131,7 @@ zen-compact-mode-styles-left = Hide Tab bar
 zen-compact-mode-styles-top = Hide Top bar
 zen-compact-mode-styles-both = Hide Both
 
-zen-urlbar-title = Zen URL Bar
+zen-urlbar-title = { -brand-short-name } URL Bar
 zen-urlbar-header = General settings for the URL bar
 zen-urlbar-description = Customize the URL bar to your liking
 
@@ -231,7 +172,7 @@ zenCKSOption-group-historyAndBookmarks = History & Bookmarks
 zenCKSOption-group-mediaAndDisplay = Media & Display
 zenCKSOption-group-zen-compact-mode = Compact Mode
 zenCKSOption-group-zen-workspace = Workspaces
-zenCKSOption-group-zen-other = Other Zen Features
+zenCKSOption-group-zen-other = Other { -brand-short-name } Features
 zenCKSOption-group-zen-split-view = Split View
 zenCKSOption-group-devTools = Developer Tools
 
@@ -322,7 +263,6 @@ zen-close-tab-shortcut = Close Tab
 zen-compact-mode-shortcut-show-sidebar = Toggle Floating Sidebar
 zen-compact-mode-shortcut-show-toolbar = Toggle Floating Toolbar
 zen-compact-mode-shortcut-toggle = Toggle Compact Mode
-zen-glance-expand = Expand Glance
 zen-workspace-shortcut-switch-1 = Switch to Workspace 1
 zen-workspace-shortcut-switch-2 = Switch to Workspace 2
 zen-workspace-shortcut-switch-3 = Switch to Workspace 3
@@ -337,7 +277,6 @@ zen-workspace-shortcut-forward = Forward Workspace
 zen-workspace-shortcut-backward = Backward Workspace
 zen-workspace-shortcut-create = Create New Workspace
 zen-sidebar-shortcut-toggle = Toggle Sidebar's Width
-zen-library-shortcut-toggle = Toggle Library
 zen-pinned-tab-shortcut-reset = Reset Pinned Tab to Pinned URL
 zen-split-view-shortcut-grid = Toggle Split View Grid
 zen-split-view-shortcut-vertical = Toggle Split View Vertical

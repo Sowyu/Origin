@@ -1,8 +1,8 @@
 diff --git a/browser/components/tabbrowser/content/tabs.js b/browser/components/tabbrowser/content/tabs.js
-index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c52cfcb39e 100644
+index dced198386cbaebd860314d8c17878e89cf2209e..9cba5f39a766242991c1a73de386e791a1b734e2 100644
 --- a/browser/components/tabbrowser/content/tabs.js
 +++ b/browser/components/tabbrowser/content/tabs.js
-@@ -197,8 +197,12 @@
+@@ -194,8 +194,12 @@
        XPCOMUtils.defineLazyPreferenceGetter(
          this,
          "_sidebarPositionStart",
@@ -17,7 +17,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
        );
  
        if (gMultiProcessBrowser) {
-@@ -220,7 +224,7 @@
+@@ -217,7 +221,7 @@
  
        this.tooltip = "tabbrowser-tab-tooltip";
  
@@ -26,7 +26,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
        this.tabDragAndDrop.init();
      }
  
-@@ -444,7 +448,7 @@
+@@ -440,7 +444,7 @@
        // and we're not hitting the scroll buttons.
        if (
          event.button != 0 ||
@@ -35,7 +35,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
          event.composedTarget.localName == "toolbarbutton"
        ) {
          return;
-@@ -525,7 +529,6 @@
+@@ -528,7 +532,6 @@
              });
            }
          } else if (isTabGroupLabel(event.target)) {
@@ -43,7 +43,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
          } else if (
            event.originalTarget.closest("scrollbox") &&
            !Services.prefs.getBoolPref(
-@@ -561,6 +564,9 @@
+@@ -564,6 +567,9 @@
      }
  
      on_keydown(event) {
@@ -53,7 +53,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
        let { altKey, shiftKey } = event;
        let [accel, nonAccel] =
          AppConstants.platform == "macosx"
-@@ -755,7 +761,6 @@
+@@ -779,7 +785,6 @@
        this._updateCloseButtons();
  
        if (!this.#animatingGroups.size) {
@@ -61,7 +61,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
        }
  
        document
-@@ -822,7 +827,7 @@
+@@ -845,7 +850,7 @@
      }
  
      get newTabButton() {
@@ -70,7 +70,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
      }
  
      get verticalMode() {
-@@ -838,6 +843,7 @@
+@@ -861,6 +866,7 @@
      }
  
      get overflowing() {
@@ -78,7 +78,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
        return this.hasAttribute("overflow");
      }
  
-@@ -851,29 +857,56 @@
+@@ -874,29 +880,49 @@
        if (pinnedChildren?.at(-1)?.id == "pinned-tabs-container-periphery") {
          pinnedChildren.pop();
        }
@@ -116,16 +116,9 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
 +        ...pinnedTabs,
 +        ...unpinnedChildren,
 +      ];
-+      const lastPinnedTabIdx = pinnedTabs.length - 1;
 +      let i = 0;
 +      for (const tab of [...allTabs]) {
-+        // add glance tabs (tabs inside tabs) to the list
-+        const glanceTab = tab.glanceTab;
-+        if (glanceTab) {
-+          // insert right after the parent tab. note: it must be inserted before
-+          // the last pinned tab so it can be inserted in the correct order
-+          allTabs.splice(Math.max(i++ + 1, lastPinnedTabIdx), 0, glanceTab);
-+        } else if (tab.classList.contains("pinned-tabs-container-separator")) {
++        if (tab.classList.contains("pinned-tabs-container-separator")) {
 +          // remove the separator from the list
 +          allTabs.splice(i, 1);
 +          i--;
@@ -145,7 +138,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
      }
  
      get allSplitViews() {
-@@ -958,29 +991,28 @@
+@@ -981,29 +1007,28 @@
          return this.#focusableItems;
        }
  
@@ -185,7 +178,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
        this.#focusableItems = focusableItems;
  
        return this.#focusableItems;
-@@ -993,6 +1025,7 @@
+@@ -1016,6 +1041,7 @@
       * focusable (ex, we don't want the splitview container to be focusable, only its children).
       */
      get dragAndDropElements() {
@@ -193,7 +186,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
        if (this.#dragAndDropElements) {
          return this.#dragAndDropElements;
        }
-@@ -1063,6 +1096,7 @@
+@@ -1086,6 +1112,7 @@
      _invalidateCachedTabs() {
        this.#allTabs = null;
        this._invalidateCachedVisibleTabs();
@@ -201,7 +194,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
      }
  
      _invalidateCachedVisibleTabs() {
-@@ -1082,7 +1116,8 @@
+@@ -1105,7 +1132,8 @@
  
      isContainerVerticalPinnedGrid(tab) {
        return (
@@ -211,7 +204,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
          this.verticalMode &&
          this.hasAttribute("expanded") &&
          !this.expandOnHover
-@@ -1176,7 +1211,7 @@
+@@ -1227,7 +1255,7 @@
  
        if (node == null) {
          // We have a container for non-tab elements at the end of the scrollbox.
@@ -220,7 +213,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
        }
  
        node.before(tab);
-@@ -1271,7 +1306,7 @@
+@@ -1271,7 +1299,7 @@
            // There are separate "new tab" buttons for horizontal tabs toolbar, vertical tabs and
            // for when the tab strip is overflowed (which is shared by vertical and horizontal tabs);
            // Attach the long click popup to all of them.
@@ -229,7 +222,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
            const newTab2 = this.newTabButton;
            const newTabVertical = document.getElementById(
              "vertical-tabs-newtab-button"
-@@ -1376,8 +1411,10 @@
+@@ -1376,8 +1404,10 @@
       */
      _handleTabSelect(aInstant) {
        let selectedTab = this.selectedItem;
@@ -240,7 +233,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
        selectedTab._notselectedsinceload = false;
      }
  
-@@ -1386,7 +1423,7 @@
+@@ -1386,7 +1416,7 @@
       * @param {boolean} [shouldScrollInstantly=false]
       */
      #ensureTabIsVisible(tab, shouldScrollInstantly = false) {
@@ -249,7 +242,7 @@ index 568f3a7cc7051ff8cb569f6bcb8018a5212f7072..b9a1cfe3a4a5035d9b06b0b3826a97c5
        if (arrowScrollbox?.overflowing) {
          arrowScrollbox.ensureElementIsVisible(tab, shouldScrollInstantly);
        }
-@@ -1513,7 +1550,7 @@
+@@ -1513,7 +1543,7 @@
      }
  
      _notifyBackgroundTab(aTab) {

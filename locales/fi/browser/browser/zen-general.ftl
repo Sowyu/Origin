@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Change Label...
 tab-context-zen-edit-icon = 
     .label = Change Icon...
-zen-themes-corrupted = { -brand-short-name } modejasi tiedosto on vioittunut. Ne on palautettu oletusteemaan.
 zen-shortcuts-corrupted = { -brand-short-name } Oikotietä sisältävä tiedosto on korruptoitunut. Ne on palautettu oletus oikoteihin.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Lisää Laajennuksia
 zen-site-data-site-settings = 
     .label = Kaikki Sivuston Asetukset
-zen-site-data-header-share = 
-    .tooltiptext = Jaa Tämä Sivu
 zen-site-data-header-reader-mode = 
     .tooltiptext = Siirry lukutilaan
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = Seuranta Suojaus
 
 zen-site-data-panel-feature-callout-title = Uusi koti lisäosille, käyttöoikeuksille ja paljon muuta
 zen-site-data-panel-feature-callout-subtitle = Klikkaa kuvaketta hallitaksesi sivuston asetuksia, tarkastella tietoturvatietoja, käyttää laajennuksia ja suorittaa yhteisiä toimintoja.
-zen-open-link-in-glance = 
-    .label = Avaa linkki vilkaisussa
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Päivitys valmis!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Mitä uutta { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Katso Julkaisutiedot
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = Jotain rikki?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Käynnistä uudelleen vianmääritystilassa
 zen-window-sync-migration-dialog-title = Keep Your Windows in Sync
 zen-window-sync-migration-dialog-message = Zen now syncs windows on the same device, so changes in one window are reflected across the others instantly.
 zen-window-sync-migration-dialog-learn-more = Learn More

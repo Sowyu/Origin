@@ -57,9 +57,7 @@ window.gZenUIManager = {
       this.onUrlbarSearchModeChanged.bind(this)
     );
 
-    gZenMediaController.init();
     gZenVerticalTabsManager.init();
-    gZenLiveFoldersUI.init();
 
     this._markAcrylicSupport();
     this._initCreateNewPopup();
@@ -539,10 +537,6 @@ window.gZenUIManager = {
     closeToken.id = closeSeq;
 
     if (this.testingEnabled && !overridePreferance) {
-      return false;
-    }
-
-    if (document.documentElement.hasAttribute("zen-welcome-stage")) {
       return false;
     }
 
@@ -1056,8 +1050,8 @@ window.gZenVerticalTabsManager = {
 
   /**
    * Whether aItem is a strip item that should animate in. Checked again a
-   * frame after the item opens, because glance and split view only claim a
-   * tab once it has been created.
+   * frame after the item opens, because split view only claims a tab once it
+   * has been created.
    *
    * @param {Element} aItem
    * @returns {boolean}
@@ -1074,7 +1068,6 @@ window.gZenVerticalTabsManager = {
       (gZenUIManager.testingEnabled && !gZenUIManager.profilingEnabled) ||
       !gZenStartup.isReady ||
       aItem.group?.hasAttribute("split-view-group") ||
-      aItem.hasAttribute("zen-glance-tab") ||
       window.gZenViewSplitter?.waitingForSplitTab
     );
   },
@@ -1758,16 +1751,12 @@ window.gZenVerticalTabsManager = {
 
   renameTabStart(event) {
     let target = event.target;
-    if (event.target.id === "context_zen-edit-tab-title") {
-      target = TabContextMenu.contextTab;
-    }
     const isTab = !!target.closest(".tabbrowser-tab");
+    // ponytail: Origin cut tab rename, so the isTab branches in the rename
+    // functions are dead; delete them when this code is next reworked.
     if (
       this._tabEdited ||
-      ((!Services.prefs.getBoolPref("zen.tabs.rename-tabs") ||
-        (Services.prefs.getBoolPref("browser.tabs.closeTabByDblclick") &&
-          event.type === "dblclick")) &&
-        isTab) ||
+      isTab ||
       !gZenVerticalTabsManager._prefsSidebarExpanded
     ) {
       return;

@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = Naam veranderen...
 tab-context-zen-edit-icon = 
     .label = Icoon veranderen...
-zen-themes-corrupted = Je { -brand-short-name } mods bestand is beschadigd. Ze zijn gereset naar het standaard thema.
 zen-shortcuts-corrupted = Je { -brand-short-name } snelkoppelingsbestand is beschadigd. Ze zijn gereset naar de standaard snelkoppelingen.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = Extensies toevoegen
 zen-site-data-site-settings = 
     .label = Alle site-instellingen
-zen-site-data-header-share = 
-    .tooltiptext = Deze pagina delen
 zen-site-data-header-reader-mode = 
     .tooltiptext = Leesmodus openen
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = Tracking bescherming
 
 zen-site-data-panel-feature-callout-title = Een nieuw thuis voor add-ons, machtigingen en meer
 zen-site-data-panel-feature-callout-subtitle = Klik op het icoon om de site-instellingen te beheren, beveiligingsinfo te bekijken, extensies te openen en gemeenschappelijke acties uit te voeren.
-zen-open-link-in-glance = 
-    .label = Link openen in Glance
-    .accesskey = G
-zen-sidebar-notification-updated-heading = Update voltooid!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = Wat is er veranderd in { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = Versie-informatie bekijken
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = Werkt er iets niet?
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = Herstarten in veilige modus
 zen-window-sync-migration-dialog-title = Hou je vensters gesynchroniseerd
 zen-window-sync-migration-dialog-message = Vanaf nu synchroniseert Zen alle vensters op hetzelfde apparaat, dus aanpassingen in het ene venster worden tegelijkertijd op het andere venster toegepast.
 zen-window-sync-migration-dialog-learn-more = Meer info

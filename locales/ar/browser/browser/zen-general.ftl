@@ -31,11 +31,8 @@ tab-context-zen-replace-pinned-url-with-current =
 tab-context-zen-edit-pinned-url = 
     .label = Edit…
     .accesskey = E
-tab-context-zen-edit-title = 
-    .label = تغيير الاسم...
 tab-context-zen-edit-icon = 
     .label = تغيير الأيقونة...
-zen-themes-corrupted = ملف التعديل { -brand-short-name } الخاص بك تالف. تم إعادة تعيينه إلى السمة الافتراضية.
 zen-shortcuts-corrupted = ملف الاختصارات { -brand-short-name } الخاص بك تالف. تم إعادة تعيينه إلى الاختصارات الافتراضية.
 # note: Do not translate the "<br/>" tags in the following string
 zen-new-urlbar-notification =
@@ -102,8 +99,6 @@ zen-site-data-get-addons =
     .label = إضافة ملحق
 zen-site-data-site-settings = 
     .label = جميع إعدادات الموقع
-zen-site-data-header-share = 
-    .tooltiptext = شارك هذه الصفحة
 zen-site-data-header-reader-mode = 
     .tooltiptext = أدخل وضع القارئ
 zen-site-data-header-screenshot = 
@@ -118,22 +113,7 @@ zen-site-data-setting-site-protection = حماية التتبع
 
 zen-site-data-panel-feature-callout-title = منزل جديد للإضافات والأذونات والمزيد
 zen-site-data-panel-feature-callout-subtitle = انقر على أيقونة لإدارة إعدادات الموقع، وعرض معلومات الأمان، والوصول إلى الملحقات، وتنفيذ الإجراءات الشائعة.
-zen-open-link-in-glance = 
-    .label = فتح الرابط بلمحة
-    .accesskey = G
-zen-sidebar-notification-updated-heading = اكتمل التحديث!
 
-# See ZenSidebarNotification.mjs to see how these would be used
-
-zen-sidebar-notification-updated-label = ما الجديد في { -brand-short-name }
-zen-sidebar-notification-updated-tooltip = 
-    .title = عرض ملاحظات الإصدار
-zen-sidebar-notification-donate-label = Support { -brand-short-name }
-zen-sidebar-notification-donate-tooltip = 
-    .title = Donate to the project
-zen-sidebar-notification-restart-safe-mode-label = شيء معطل؟
-zen-sidebar-notification-restart-safe-mode-tooltip = 
-    .title = إعادة التشغيل في الوضع الآمن
 zen-window-sync-migration-dialog-title = حافظ على تزامن نوافذك
 zen-window-sync-migration-dialog-message = يقوم Zen الآن بمزامنة النوافذ على نفس الجهاز، لذا فإن التغييرات في نافذة واحدة تنعكس في النوافذ الأخرى على الفور.
 zen-window-sync-migration-dialog-learn-more = تعرف على المزيد

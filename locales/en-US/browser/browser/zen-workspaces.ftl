@@ -13,9 +13,6 @@ zen-panel-ui-workspaces-create =
 zen-panel-ui-folder-create =
     .label = Create Folder
 
-zen-panel-ui-live-folder-create =
-    .label = Live Folder
-
 zen-panel-ui-new-empty-split =
     .label = New Split
 
@@ -51,10 +48,6 @@ zen-workspaces-panel-context-open =
 zen-workspaces-panel-context-edit =
     .label = Edit Space
     .accesskey = E
-
-zen-bookmark-edit-panel-workspace-selector =
-    .value = Spaces
-    .accesskey = W
 
 zen-panel-ui-gradient-generator-algo-complementary =
     .label = Complementary
@@ -92,9 +85,6 @@ zen-workspaces-remote-delete-body = { $name } was deleted on another device. Del
 # Note that the html tag MUST not be changed or removed, as it is used to better
 # display the shortcut in the toast notification.
 zen-workspaces-close-all-unpinned-tabs-toast = Tabs Closed! Use <span>{ $shortcut }</span> to undo.
-zen-workspaces-close-all-unpinned-tabs-title =
-    .label = Clear
-    .tooltiptext = Close all unpinned tabs
 
 zen-panel-ui-workspaces-change-forward =
     .label = Next Space

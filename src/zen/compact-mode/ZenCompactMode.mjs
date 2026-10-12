@@ -61,12 +61,6 @@ ChromeUtils.defineLazyGetter(lazy, "mainAppWrapper", () =>
   document.getElementById("zen-main-app-wrapper")
 );
 
-ChromeUtils.defineESModuleGetters(
-  lazy,
-  { ZenLibrary: "moz-src:///zen/library/ZenLibrary.mjs" },
-  { global: "current" }
-);
-
 window.gZenCompactModeManager = {
   _flashTimeouts: {},
   _eventListeners: [],
@@ -165,9 +159,6 @@ window.gZenCompactModeManager = {
   },
 
   set preference(value) {
-    if (lazy.ZenLibrary.isLibrarySlightlyOpen) {
-      return;
-    }
     if (!this.shouldBeCompact) {
       value = false;
     }
@@ -248,8 +239,7 @@ window.gZenCompactModeManager = {
     if (
       !aInstant &&
       this.preference &&
-      lazy.COMPACT_MODE_FLASH_ENABLED &&
-      !gZenGlanceManager._animating
+      lazy.COMPACT_MODE_FLASH_ENABLED
     ) {
       this.flashSidebar();
     }
@@ -1012,26 +1002,17 @@ window.gZenCompactModeManager = {
     );
   },
 
-  async _onTabOpen(tab, inBackground, beforeRouteResult = {}) {
+  async _onTabOpen(tab, inBackground) {
     const isSidebarHidden = this.preference && !this.isSidebarPotentiallyOpen();
 
     if (
       inBackground &&
-      (isSidebarHidden || beforeRouteResult.isRouteFound) &&
+      isSidebarHidden &&
       this._canShowBackgroundTabToast &&
-      !gZenGlanceManager._animating &&
       !this._nextTimeWillBeActive
     ) {
-      const isTabRoutedToCurrentSpace =
-        beforeRouteResult.targetRoute === gZenWorkspaces.activeWorkspace;
-      // Do not show the toast if the sidebar is not hidden and
-      // the tab is being routed to the current space
-      if (!isSidebarHidden && isTabRoutedToCurrentSpace) {
-        return;
-      }
-
-      let messageId = "zen-background-tab-opened-toast";
-      let toastOptions = {
+      const messageId = "zen-background-tab-opened-toast";
+      const toastOptions = {
         button: {
           id: "zen-open-background-tab-button",
           command: () => {
@@ -1040,13 +1021,6 @@ window.gZenCompactModeManager = {
           },
         },
       };
-
-      if (beforeRouteResult.isRouteFound && !isTabRoutedToCurrentSpace) {
-        messageId = "zen-space-routing-tab-routed-toast";
-        toastOptions = {
-          l10nArgs: { targetWorkspace: beforeRouteResult.targetWorkspaceName },
-        };
-      }
 
       gZenUIManager.showToast(messageId, toastOptions);
     }
