@@ -4,16 +4,20 @@ Update this file at the end of every work session. Newest log entry first.
 
 ## Current milestone
 
-Milestone 1, the baseline, started 2026-10-12.
+Milestone 2, the debloat, started 2026-10-13 at 00:10 on the user's word (see Decisions). Milestone 1's measurements finish inside it; its targets and demo fold into milestone 2's demo.
 
-Next action: the measurement chain `scripts/perf/m1-batches` runs detached as job `m1` (log `../Zen-Origin-research/logs/m1.log`, pid in `m1.pid`) in this order: baseline-1, profiler-1, effects-1. It was restarted on 2026-10-12 at 22:47 with Safari added to baseline-1 and should end about 08:30 on 10-13. It resumes where it stopped if rerun. A second job, `memory` (pid in `logs/memory.pid`), waits for `logs/m1.exit` and then runs batch memory-1: idle on Firefox and stock Zen with only the selected tab loaded, with and without spare processes (variants `on-demand` and `lean-memory`), about 50 minutes. When both end, run `scripts/perf/report baseline-1 --out docs/perf/2026-10-13-baseline` and the same for profiler-1, effects-1 and memory-1, write the results into `docs/benchmarks.md`, then propose the energy and memory targets.
+Next action:
+1. The measurement chain `scripts/perf/m1-batches` runs detached as job `m1` (log `../Zen-Origin-research/logs/m1.log`, pid in `m1.pid`, restarted 2026-10-13 00:20): the rest of baseline-1 (Safari), effects-1 (69 runs, about 4.8 hours), memory-1, then profiler-1. It resumes where it stopped if rerun. Build only through `scripts/perf/hold`, which pauses it between runs.
+2. Four agents work in the tree without building or committing: Boosts; Glance, Space routing, Live folders, Share, Library and media controls; Mods, Welcome and the unlisted cuts; branding (Origin, bundle ID io.github.sowyu.origin, profile folder, placeholder icon, no Zen servers). When they report, review the diff, `git -C engine checkout` any file whose patch was dropped, run `npm run import` and build Origin through `scripts/perf/hold`, then smoke-test it.
+3. Then: research the privatefox and fastfox prefs against the shipped security features, add Origin's prefs (no spare processes, no preloaded new tab page, the effects the effects batch shows are costly), make an `origin` template, and measure Origin on every scenario (3 runs, with the no-browser floor) into batch origin-1.
+4. Report baseline-1, effects-1, memory-1, profiler-1 and origin-1 into `docs/benchmarks.md` and show the user the numbers.
 
 ## Milestones
 
 | # | Milestone | Status |
 |---|---|---|
-| 1 | Baseline: build stock Zen, measurement harness, measure Zen, Firefox and Safari, cost of each Zen effect, `docs/cuts.md`, DRM and Sync checks | in progress |
-| 2 | Debloat: Firefox-level cuts, remove cut Zen features and Zen server calls, own bundle ID and profile folder, measure against the baseline | not started |
+| 1 | Baseline: build stock Zen, measurement harness, measure Zen, Firefox and Safari, cost of each Zen effect, `docs/cuts.md`, DRM and Sync checks | measurements finishing; targets and demo folded into milestone 2 |
+| 2 | Debloat: Firefox-level cuts, remove cut Zen features and Zen server calls, own bundle ID and profile folder, measure against the baseline | in progress since 2026-10-13 |
 | 3 | Rewrite study (can run beside milestone 2), then wait for the user's decision | not started |
 | 4 | Lean UI: trim or rewrite as decided, meet the energy targets, side-by-side screenshots | not started |
 | 5 | Release: name and icon, signing, update feed, MacBook battery script, `scripts/sync-upstream`, first release | not started |
@@ -42,6 +46,8 @@ Next action: the measurement chain `scripts/perf/m1-batches` runs detached as jo
 
 ## Decisions made
 
+- 2026-10-13 00:10: The user wrote "just debloat zen until system resources is minimal and battery usage is also minimal then show me the numbers". I took it as the OK to start milestone 2 with `docs/cuts.md` as drafted (the user struck nothing) and with "as low as the harness can show" as the target. The site data panel and the hidden AI settings page wait, because they need a visual check and pref decisions. The "replace with Firefox's own" items wait for the rewrite study.
+- 2026-10-13: Measurements and builds never overlap. `scripts/perf/hold` pauses the chain between runs, and each run's quiet wait keeps it paused.
 - 2026-10-12: The repo is Zen's tree at the root with our files added. Zen's history is about 6 GB, so `upstream` holds one parentless snapshot commit per Zen release. GitHub refuses to take `upstream` (its tree has workflow files and the token has no `workflow` scope), so it stays local and can be rebuilt from Zen's tags.
 - 2026-10-12: Baseline builds use Zen's release options without LTO and PGO (`ZEN_RELEASE=1 ZEN_DISABLE_LTO=1 ZEN_GA_DISABLE_PGO=1`), with Zen's own SDK pick (MacOSX26.5.sdk from the Command Line Tools, which is also Firefox 157's minimum). Official Zen has thin LTO and PGO, so official against self-built gives a first estimate of what LTO and PGO save.
 - 2026-10-12: The stock build is en-US only (`scripts/update_en_US_packs.py`). Zen's `download-language-packs.sh` clones all of firefox-l10n and edits the global git config, so it is skipped.
