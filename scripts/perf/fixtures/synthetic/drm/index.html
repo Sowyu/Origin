@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Widevine check, not an energy fixture: it loads Shaka Player and a Widevine test stream from
+     Google's servers. Each step is written into document.title, which the harness reads. -->
+<html>
+<head>
+<meta charset="utf-8">
+<title>drm: start</title>
+<style>body { font: 14px system-ui; margin: 20px; } video { background: #000; }</style>
+<script src="https://cdn.jsdelivr.net/npm/shaka-player/dist/shaka-player.compiled.js"></script>
+</head>
+<body>
+<video id="v" width="640" height="360" muted playsinline></video>
+<pre id="log"></pre>
+<script>
+const log = s => { document.title = "drm: " + s; document.getElementById("log").textContent += s + "\n"; };
+async function main() {
+  log("secure context " + isSecureContext);
+  if (!navigator.requestMediaKeySystemAccess) { log("FAIL no EME API"); return; }
+  let access;
+  try {
+    access = await navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{
+      initDataTypes: ["cenc"],
+      videoCapabilities: [{ contentType: 'video/mp4; codecs="avc1.4d401e"', robustness: "SW_SECURE_CRYPTO" }],
+      audioCapabilities: [{ contentType: 'audio/mp4; codecs="mp4a.40.2"', robustness: "SW_SECURE_CRYPTO" }],
+    }]);
+    await access.createMediaKeys();
+    log("media keys ok");
+  } catch (e) { log("FAIL key system: " + e.name + " " + e.message); return; }
+  if (!window.shaka) { log("FAIL shaka did not load"); return; }
+  shaka.polyfill.installAll();
+  const video = document.getElementById("v");
+  const player = new shaka.Player();
+  await player.attach(video);
+  player.configure({ drm: { servers: { "com.widevine.alpha": "https://cwip-shaka-proxy.appspot.com/no_auth" } } });
+  player.addEventListener("error", ev => log("FAIL player error " + ev.detail.code));
+  try {
+    await player.load("https://storage.googleapis.com/shaka-demo-assets/angel-one-widevine/dash.mpd");
+  } catch (e) { log("FAIL load " + e.code); return; }
+  await video.play().catch(e => log("play() " + e.name));
+  setTimeout(() => {
+    const s = player.getStats();
+    const ok = video.currentTime > 5 && s.decodedFrames > 100;
+    log((ok ? "OK playing" : "FAIL stalled") + " t=" + video.currentTime.toFixed(1) + " frames=" + s.decodedFrames +
+        " " + s.width + "x" + s.height + " keysystem=" + player.keySystem());
+  }, 15000);
+}
+main();
+</script>
+</body>
+</html>

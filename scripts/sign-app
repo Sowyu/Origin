@@ -1,0 +1,79 @@
+#!/usr/bin/python3
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Signs a Gecko .app with the user's Apple Development identity and Firefox's own hardened
+runtime entitlements, inside out, the way Firefox's production signing groups do
+(engine/taskcluster/config.yml, mac-signing.hardened-sign-config.production).
+
+Zen's patched `mach macos-sign` insists on moving a provisioning profile from Zen's CI into the
+bundle, so this script calls codesign directly. Like `mach macos-sign -e
+production-without-restricted`, it drops the two entitlements that need a provisioning profile
+(com.apple.application-identifier, com.apple.developer.web-browser.public-key-credential).
+
+Usage: scripts/sign-app <path/to/App.app> [--identity "Apple Development"] [--team 8Q677AYRU7]
+"""
+import argparse, glob, os, plistlib, subprocess, sys, tempfile
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ENTITLEMENTS = os.path.join(ROOT, "engine", "security", "mac", "hardenedruntime", "production")
+RESTRICTED = ["com.apple.application-identifier", "com.apple.developer.web-browser.public-key-credential"]
+
+# Inner code first: libraries and helpers without entitlements, then helper apps, then the app.
+GROUPS = [
+    (None, ["Contents/MacOS/*.dylib", "Contents/MacOS/XUL", "Contents/Resources/gmp-clearkey/*/*.dylib",
+            "Contents/Frameworks/ChannelPrefs.framework",
+            "Contents/MacOS/updater.app/Contents/Frameworks/UpdateSettings.framework",
+            "Contents/MacOS/crashhelper", "Contents/MacOS/pingsender", "Contents/MacOS/nmhproxy"]),
+    (None, ["Contents/MacOS/updater.app", "Contents/MacOS/gpu-helper.app", "Contents/MacOS/crashreporter.app",
+            "Contents/Library/LaunchServices/org.mozilla.updater",
+            "Contents/Library/LaunchServices/org.mozilla.dmgInstallHelper"]),
+    ("plugin-container.xml", ["Contents/MacOS/plugin-container.app"]),
+    ("media-plugin-helper.xml", ["Contents/MacOS/media-plugin-helper.app"]),
+    ("firefox.browser.xml", [""]),
+]
+
+
+def run(cmd):
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.exit(f"{' '.join(cmd)}\n{r.stderr.strip()}")
+    return r.stdout + r.stderr
+
+
+def entitlements(name):
+    data = plistlib.load(open(os.path.join(ENTITLEMENTS, name), "rb"))
+    for k in RESTRICTED:
+        data.pop(k, None)
+    fd, path = tempfile.mkstemp(prefix="zo-ent-", suffix=".plist")
+    with os.fdopen(fd, "wb") as f:
+        plistlib.dump(data, f)
+    return path
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("app")
+    p.add_argument("--identity", default="Apple Development")
+    p.add_argument("--team", default="8Q677AYRU7")
+    a = p.parse_args()
+    app = os.path.abspath(a.app)
+    run(["xattr", "-cr", app])
+    for ent, globs in GROUPS:
+        cmd = ["codesign", "--force", "--options", "runtime", "--timestamp=none", "--sign", a.identity]
+        if ent:
+            cmd += ["--entitlements", entitlements(ent)]
+        paths = sorted({p for g in globs for p in glob.glob(os.path.join(app, g))} if globs != [""] else [app])
+        if paths:
+            run(cmd + paths)
+            print(f"signed {len(paths)} item(s){' with ' + ent if ent else ''}")
+    run(["codesign", "--verify", "--deep", "--strict", app])
+    info = run(["codesign", "-dv", app])
+    team = next((l.split("=", 1)[1] for l in info.splitlines() if l.startswith("TeamIdentifier=")), "")
+    if team != a.team:
+        sys.exit(f"signed with team {team!r}, expected {a.team}")
+    print(f"verified: {app}, team {team}")
+
+
+if __name__ == "__main__":
+    main()

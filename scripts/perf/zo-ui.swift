@@ -209,8 +209,9 @@ case "key":
 case "type":
     let pid = pidArg(2), cps = optional(4, 10)
     let src = CGEventSource(stateID: .hidSystemState)
-    for unit in arg(3).utf16 {
-        guardInput(pid)
+    let start = Date()
+    for (i, unit) in arg(3).utf16.enumerated() {
+        if i % 20 == 0 { guardInput(pid) }
         var u = unit
         for down in [true, false] {
             let e = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: down)!
@@ -218,7 +219,8 @@ case "type":
             e.flags = []  // the HID source can still carry modifiers from an earlier shortcut
             post(e)
         }
-        usleep(useconds_t(1_000_000 / cps))
+        let wait = start.addingTimeInterval(Double(i + 1) / cps).timeIntervalSinceNow
+        if wait > 0 { usleep(useconds_t(wait * 1_000_000)) }
     }
     print("typed", arg(3).count)
 case "click":
@@ -247,12 +249,17 @@ case "scroll":
     guard let dy = Int32(arg(5)) else { fail("dy must be an integer", 2) }
     let count = Int(num(6)), gap = num(7)
     mouse(.mouseMoved, p); usleep(50_000)
-    for _ in 0..<count {
-        guardInput(pid)
+    // Paced against the clock, and the frontmost check runs every 40 events, so the run takes
+    // count * gap whatever the per-event overhead is.
+    let start = Date()
+    for i in 0..<count {
+        if i % 40 == 0 { guardInput(pid) }
         let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: dy, wheel2: 0, wheel3: 0)
         e?.location = p
         post(e)
-        usleep(useconds_t(gap * 1000))
+        let due = start.addingTimeInterval(Double(i + 1) * gap / 1000)
+        let wait = due.timeIntervalSinceNow
+        if wait > 0 { usleep(useconds_t(wait * 1_000_000)) }
     }
     print("scrolled", dy, count)
 case "waitpixel":

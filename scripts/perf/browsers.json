@@ -25,5 +25,12 @@
     "engine": "webkit",
     "ui": "safari",
     "note": "Safari 27.0.1 as installed"
+  },
+  "zen-stock-signed": {
+    "app": "builds/zen-1.23.2b-stock-signed/Zen.app",
+    "engine": "gecko",
+    "ui": "zen",
+    "template": "zen-1.23.2b",
+    "note": "zen-stock signed with the Apple Development identity and Firefox's hardened runtime entitlements (scripts/sign-app); for the DRM check"
   }
 }

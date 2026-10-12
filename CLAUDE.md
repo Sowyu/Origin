@@ -6,7 +6,7 @@ Start every session in this order:
 
 1. Read `PROGRESS.md`. It names the current milestone, what is done, what is next and every open question.
 2. Read `docs/spec.md`, the user's brief. It is the source of truth for scope, hard rules and targets. Decisions made later live in `PROGRESS.md`.
-3. Before measuring anything, read `docs/benchmarks.md` (method and numbers).
+3. Before measuring anything, read `docs/benchmarks.md` (method and numbers). The harness is `scripts/perf/` (`run`, `report`, `make-profile`, `serve`); start the fixture server with `scripts/detach serve scripts/perf/serve` first.
 
 Update `PROGRESS.md` before you stop: tick what you finished, add what you learned, and set the next action. A new agent with no chat history must be able to continue from that file alone.
 
@@ -46,7 +46,7 @@ Update `PROGRESS.md` before you stop: tick what you finished, add what you learn
 
 - The repo root is Zen's tree. Branch `upstream` holds one snapshot commit per Zen release (Zen's full history is about 6 GB, so it is not imported). `main` is `upstream` plus our commits. To move to a new Zen tag, add its tree as a new `upstream` commit and `git rebase --onto upstream <old upstream> main`.
 - Zen's GitHub workflows are deleted on `main`, because their schedules would run in our public repo. `upstream` stays local: GitHub refuses it because its tree holds workflow files and our token has no `workflow` scope. Rebuild it from Zen's tags when needed (`git fetch --depth 1 <zen> refs/tags/<tag>` and `git commit-tree`).
-- `engine/` (Firefox source plus the object dir) and `.surfer/` are ignored by Zen's `.gitignore`. Large trees, downloads, tools, logs and builds live in `../Zen-Origin-research/`.
+- `engine/` is a symlink to `engine.noindex/` (Firefox source plus the object dir). Spotlight skips folders ending in `.noindex`; without that it indexed the 400,000 files for hours at a load of 15. Both names are in `.git/info/exclude`, and `.surfer/` is in Zen's `.gitignore`. Large trees, downloads, tools, logs and builds live in `../Zen-Origin-research/`; harness templates and runs in `../Zen-Origin-research/perf.noindex/`.
 - `docs/spec.md` is the brief, `docs/benchmarks.md` holds the method and numbers, `docs/cuts.md` lists every removed feature, `docs/research/` holds raw notes with sources. Zen's own docs (`docs/contribute.md` and others) stay where they are.
 - `scripts/env.sh` puts the pinned toolchains on PATH (Node 22, Python 3.11, Rust 1.95.0, GNU tar). Source it before any npm, surfer or mach command.
 

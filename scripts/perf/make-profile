@@ -13,7 +13,7 @@ where its divider sits on screen. The vertical variant (Firefox) has vertical ta
 hover, for the sidebar scenario. The browser then idles for --warmup seconds so first-run
 downloads (Remote Settings, Safe Browsing lists, media plugins) finish, and quits cleanly so the
 session is saved. Marionette runs only here, never while measuring.
-Output: ../Zen-Origin-research/perf/templates/<template>/<variant>/ with layout.json beside it.
+Output: ../Zen-Origin-research/perf.noindex/templates/<template>/<variant>/ with layout.json beside it.
 """
 import argparse, json, os, shutil, sys, time
 

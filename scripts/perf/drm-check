@@ -1,0 +1,63 @@
+#!/usr/bin/python3
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Widevine check: plays Google's Widevine test stream (Shaka Player, no-auth license proxy) in each
+browser from a copy of its warm template, which already holds the Widevine CDM, with Gecko's GMP
+and EME logs on. Reads the outcome from the page title (http://drm.localhost:8765/).
+
+Usage: scripts/perf/drm-check [browser ...]   (default: zen-stock-signed zen-official firefox)
+Output: ../Zen-Origin-research/perf.noindex/drm/<browser>/ with title.txt, screenshot.png, gmp.log
+"""
+import json, os, sys, time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import zo
+
+
+def check(name, b):
+    out = os.path.join(zo.PERF, "drm", name)
+    os.makedirs(out, exist_ok=True)
+    app = b["app"] if os.path.isabs(b["app"]) else os.path.join(zo.RESEARCH, b["app"])
+    prof = os.path.join(out, "profile")
+    zo.clone_tree(os.path.join(zo.TEMPLATES, b["template"], "base"), prof)
+    cfg = json.load(open(os.path.join(zo.HERE, "profiles.json")))
+    zo.write_prefs(os.path.join(prof, "user.js"), dict(cfg["common"], **cfg[b["ui"]]), "harness prefs")
+    log = os.path.join(out, "gmp.log")
+    env = {"MOZ_LOG": "GMP:5,EME:5,GMPLibrary:5,MediaDecoder:3", "MOZ_LOG_FILE": log}
+    pid, _ = zo.launch(app, args=["-profile", prof, zo.url("drm")], env=env)
+    try:
+        zo.wait_window(pid)
+        zo.place_window(pid)
+        end, title = time.time() + 150, ""
+        while time.time() < end:
+            title = zo.ui("title", pid, check=False)
+            if "OK playing" in title or "FAIL" in title:
+                break
+            time.sleep(1)
+        zo.sh(["screencapture", "-x", "-R" + ",".join(map(str, zo.WINDOW)), os.path.join(out, "screenshot.png")], check=False)
+        open(os.path.join(out, "title.txt"), "w").write(title + "\n")
+        zo.log(name, "->", title)
+    finally:
+        zo.quit_app(pid)
+    hits = []
+    for path in sorted(p for p in os.listdir(out) if p.startswith("gmp.log")):
+        for line in open(os.path.join(out, path), errors="replace"):
+            if any(k in line for k in ("VerifyCdmHost", "Verification", "sig", "LoadLibrary", "CDM", "failed", "Failed")):
+                hits.append(line.strip()[:220])
+    open(os.path.join(out, "gmp-highlights.txt"), "w").write("\n".join(hits[:200]) + "\n")
+    return title
+
+
+def main():
+    browsers = json.load(open(os.path.join(zo.HERE, "browsers.json")))
+    names = sys.argv[1:] or ["zen-stock-signed", "zen-official", "firefox"]
+    for n in names:
+        if zo.app_pids(browsers[n]["app"] if os.path.isabs(browsers[n]["app"]) else os.path.join(zo.RESEARCH, browsers[n]["app"])):
+            sys.exit(f"{n} is already running")
+    results = {n: check(n, browsers[n]) for n in names}
+    print(json.dumps(results, indent=2))
+
+
+if __name__ == "__main__":
+    main()

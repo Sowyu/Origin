@@ -10,7 +10,7 @@ Usage: scripts/perf/run --batch NAME --browsers zen-official,firefox,zen-stock+n
 Runs are interleaved (run 1 of every scenario and browser, then run 2, ...) so slow drift on the
 machine spreads over all browsers. Each run starts the browser from a fresh copy of its template,
 waits for a quiet machine, settles, measures and quits. Raw data goes to
-../Zen-Origin-research/perf/runs/<batch>/<browser>[+variant]/<scenario>/r<n>/.
+../Zen-Origin-research/perf.noindex/runs/<batch>/<browser>[+variant]/<scenario>/r<n>/.
 Scenarios: see SCENARIOS below; `--scenarios all` runs every one.
 """
 import argparse, json, os, shutil, sys, time, traceback
@@ -301,6 +301,11 @@ def main():
         if bname not in browsers or (var and var not in variants):
             sys.exit(f"unknown browser or variant in {n}")
         configs.append((bname, var))
+    import urllib.request
+    try:
+        urllib.request.urlopen(zo.url("blank"), timeout=5).read()
+    except Exception as e:
+        sys.exit(f"fixture server not answering ({e}); start it with scripts/detach serve scripts/perf/serve")
     batch_dir = os.path.join(zo.RUNS, a.batch)
     os.makedirs(batch_dir, exist_ok=True)
     json.dump({"argv": sys.argv, "started": time.strftime("%Y-%m-%d %H:%M:%S"),

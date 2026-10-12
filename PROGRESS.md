@@ -6,7 +6,7 @@ Update this file at the end of every work session. Newest log entry first.
 
 Milestone 1, the baseline, started 2026-10-12.
 
-Next action: when the stock build finishes (`../Zen-Origin-research/logs/build.log`, stats in `logs/build-stats/<run>/summary.txt`), package it, copy the app to `../Zen-Origin-research/builds/zen-1.23.2b-stock/Zen.app`, add the build numbers to `docs/benchmarks.md`, run the calibration scenario, then start the baseline batch (`scripts/perf/run --batch baseline-1 --browsers zen-official,zen-stock,firefox --scenarios all --runs 3`, detached with `scripts/detach`). Safari waits for the user's answer about the Safari that is already running.
+Next action: the measurement chain `scripts/perf/m1-batches` runs detached (log `../Zen-Origin-research/logs/m1.log`): baseline-1, effects-1, profiler-1. It resumes where it stopped if rerun. When it ends, run `scripts/perf/report baseline-1 --out docs/perf/2026-10-13-baseline` and the same for effects-1 and profiler-1, write the results into `docs/benchmarks.md`, propose targets. Safari waits for the user's answer about the Safari that is already running.
 
 ## Milestones
 
@@ -24,18 +24,19 @@ Next action: when the stock build finishes (`../Zen-Origin-research/logs/build.l
 - [x] Toolchains in `../Zen-Origin-research/tools`: Node 22.23.3, Python 3.11.17 (uv), Rust 1.95.0 (rustup, ~/.cargo), GNU tar 1.35 (built from source), xz linked from Homebrew
 - [x] Official builds downloaded and checksummed, copied unmodified to `../Zen-Origin-research/builds/`: Zen 1.23.2b, Firefox 157.0.1; app updates off through user policy defaults
 - [x] Firefox 157.0.1 source in `engine/` (SHA-256 checked against Mozilla's SHA256SUMS)
-- [ ] Build stock Zen without changes; record build time, peak memory and disk use (running since 14:25)
+- [x] Build stock Zen without changes: 23.4 min compile, 31 min in all, 14.2 GB peak memory, about 16.4 GB of disk (`docs/benchmarks.md`); app in `../Zen-Origin-research/builds/zen-1.23.2b-stock/`
 - [x] Harness: frozen pages (`scripts/perf/make-fixtures`), loopback server (`serve`), `zo-ui`, `zo-stat`, templates (`make-profile`), runner (`run`), report (`report`); functional test on Firefox idle passed
 - [x] Templates: firefox-157.0.1/base, zen-1.23.2b/base
-- [ ] Templates: split variants for Firefox and Zen
-- [ ] Functional test of every scenario on Firefox and Zen
+- [x] Templates: split variants for Firefox and Zen, vertical-tabs variant for Firefox
+- [x] Functional test of every scenario on Firefox and Zen (batches test-3 and test-4, all 22 runs ok, screenshots checked)
 - [ ] Calibration run (5 minutes of idle per browser) to confirm the 45 s settle time
 - [ ] Measure official Zen, official Firefox, Safari and self-built stock Zen on all scenarios, 3 runs each
 - [ ] Profiler runs: RefreshDriverTick markers at idle per Gecko browser
 - [ ] Measure each Zen visual effect by turning it off on its own (`scripts/perf/variants.json`)
 - [ ] Propose a target per scenario and get the user's OK
 - [x] `docs/cuts.md` drafted, waiting for the user's review
-- [ ] DRM check (Widevine: test page here; Netflix, Spotify and Sync need the user's accounts) in a build we made and signed
+- [x] Widevine test page plays in stock Zen built and signed here (Apple Development, `scripts/sign-app`), official Zen and Firefox (`docs/drm-sync.md`)
+- [ ] Netflix, Spotify and Sync: need the user's accounts
 - [ ] Demo milestone 1
 
 ## Decisions made
