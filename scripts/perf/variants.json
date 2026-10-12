@@ -31,9 +31,9 @@
     "scenarios": ["switch"]
   },
   "reduced-motion": {
-    "what": "Reduce Motion as the system setting would set it (many animations at once)",
+    "what": "Reduce Motion as the system setting would set it (many animations at once). Not in the effects batch: it also changes what every website sees, so Origin would not ship it",
     "prefs": {"ui.prefersReducedMotion": 1},
-    "scenarios": ["switch", "sidebar", "split"]
+    "scenarios": []
   },
   "no-compact-animation": {
     "what": "compact mode sidebar slide",
@@ -54,6 +54,15 @@
     "what": "native NSPopover arrow panels (Zen turns them on; Firefox ships them off)",
     "prefs": {"widget.macos.native-popovers": false},
     "scenarios": ["idle"]
+  },
+  "min-visual": {
+    "what": "every effect above off at once, except reduced-motion: the lower bound for Zen's look",
+    "prefs": {"zen.widget.macos.window-vibrancy": false, "layout.css.corner-shape.enabled": false,
+              "zen.workspaces.switch-animation-duration": 0, "zen.view.compact.animate-sidebar": false,
+              "zen.theme.essentials-favicon-bg": false, "zen.view.enable-loading-indicator": false,
+              "widget.macos.native-popovers": false},
+    "userchrome": "#zen-browser-background::before, #zen-browser-background::after, #zen-toolbar-background::before, #zen-toolbar-background::after { display: none !important; }\n#tabbrowser-tabpanels .browserSidebarContainer { box-shadow: none !important; border-radius: 0 !important; }\n",
+    "scenarios": ["switch", "scroll", "video-windowed", "sidebar", "split"]
   },
   "on-demand": {
     "what": "only the selected tab loads at startup, as Firefox ships it for normal tabs, and pinned tabs wait too: what unloading background tabs leaves",

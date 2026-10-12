@@ -1,0 +1,23 @@
+#!/bin/sh
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+# Runs a command, such as a build or a test launch, while measurement batches wait between runs,
+# so no measurement window overlaps it. It waits until the running batch sits in its quiet wait,
+# or until no batch is running, then runs the command and lets the batches go on.
+# One hold runs at a time, so builds never overlap either. A hold killed with -9 leaves
+# perf.noindex/hold.lock behind; remove it by hand.
+# Usage: scripts/perf/hold <command> [args...]
+set -u
+[ $# -ge 1 ] || { echo "usage: scripts/perf/hold <command> [args...]" >&2; exit 2; }
+perf="$(cd "$(dirname "$0")/../../.." && pwd)/Zen-Origin-research/perf.noindex"
+until mkdir "$perf/hold.lock" 2>/dev/null; do sleep 10; done
+trap 'rm -f "$perf/pause"; rmdir "$perf/hold.lock"' EXIT
+trap 'exit 130' INT TERM
+rm -f "$perf/paused"
+touch "$perf/pause"
+while [ ! -e "$perf/paused" ] && pgrep -f '[Pp]ython[^ ]* [^ ]*scripts/perf/run( |$)' >/dev/null; do
+  sleep 5
+done
+"$@"

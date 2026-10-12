@@ -14,6 +14,10 @@ TEMPLATES = os.path.join(PERF, "templates")
 RUNS = os.path.join(PERF, "runs")
 PORT = 8765
 UID = 502  # the GUI session user (mrm)
+# scripts/perf/hold creates PAUSE to keep runs from starting while it builds; a run waiting in
+# quiet_wait answers with PAUSED, so the build knows no measurement is under way.
+PAUSE = os.path.join(PERF, "pause")
+PAUSED = os.path.join(PERF, "paused")
 
 # The standard window, in screen points with a top-left origin. 1440 by 900 is a common laptop size.
 WINDOW = (120, 60, 1440, 900)
@@ -151,6 +155,15 @@ def quiet_wait(max_load=3.5, max_wait=900, settle=20):
     average under max_load, held for `settle` seconds. Gives up after max_wait and says so."""
     start, quiet_since = time.time(), None
     while True:
+        if os.path.exists(PAUSE):
+            open(PAUSED, "w").write(str(os.getpid()))
+            log("held by", PAUSE)
+            while os.path.exists(PAUSE):
+                time.sleep(5)
+            if os.path.exists(PAUSED):
+                os.remove(PAUSED)
+            start, quiet_since = time.time(), None
+            continue
         busy, load = busy_processes(), load1()
         if not busy and load < max_load:
             quiet_since = quiet_since or time.time()
