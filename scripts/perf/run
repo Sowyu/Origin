@@ -73,9 +73,14 @@ class Run:
         prof = self.prepare_profile(template_variant)
         env = {}
         if self.args.profiler and self.b["engine"] == "gecko":
-            env = {"MOZ_PROFILER_STARTUP": "1", "MOZ_PROFILER_STARTUP_INTERVAL": "10",
+            # ZO_PROFILER_FEATURES and ZO_PROFILER_INTERVAL override the defaults for a one-off
+            # profile with stack samples (for example "power,js,stackwalk,cpu" at 1 ms); the
+            # defaults keep the profiler's own cost low enough to count RefreshDriverTick markers.
+            env = {"MOZ_PROFILER_STARTUP": "1",
+                   "MOZ_PROFILER_STARTUP_INTERVAL": os.environ.get("ZO_PROFILER_INTERVAL", "10"),
                    "MOZ_PROFILER_STARTUP_ENTRIES": "4194304",
-                   "MOZ_PROFILER_STARTUP_FEATURES": "power,nostacksampling,nomarkerstacks",
+                   "MOZ_PROFILER_STARTUP_FEATURES": os.environ.get("ZO_PROFILER_FEATURES",
+                                                                   "power,nostacksampling,nomarkerstacks"),
                    "MOZ_PROFILER_STARTUP_FILTERS": "GeckoMain,Compositor,Renderer,RenderBackend",
                    "MOZ_PROFILER_SHUTDOWN": os.path.join(self.dir, "profile.json")}
         if self.b["engine"] == "gecko":
