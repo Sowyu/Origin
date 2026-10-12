@@ -1,0 +1,14 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# Origin's memory settings. Batch memory-1 measures them (variant lean-memory).
+
+# Firefox keeps 3 spare content processes of about 21 MB each ready for new sites
+# (dom.ipc.processPrelaunch.fission.number). Without them a new site starts its process on demand.
+- name: dom.ipc.processPrelaunch.enabled
+  value: false
+
+# Firefox loads the next new tab page in the background before you open it.
+- name: browser.newtab.preload
+  value: false

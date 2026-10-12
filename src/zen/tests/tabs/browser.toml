@@ -13,6 +13,8 @@ tags = [
   "vertical-tabs"
 ]
 
+["browser_origin_tab_unloader.js"]
+
 ["browser_tabs_close_recently.js"]
 
 ["browser_tabs_cycle_by_attribute.js"]

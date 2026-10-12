@@ -1,0 +1,12 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# Origin's tab unloader (src/zen/tabs/OriginTabUnloader.sys.mjs). Once a minute it
+# unloads tabs that sat in the background this many minutes. 0 turns it off.
+- name: origin.tabs.unload-after-minutes
+  value: 10
+
+# Essentials and pinned tabs stay loaded so mail and chat keep their notifications.
+- name: origin.tabs.unload-essentials
+  value: false

@@ -1,0 +1,22 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# Firefox's AI features that Zen's prefs/firefox/ai.yaml leaves on. Translations run in their own
+# engine and keep working (docs/research/firefox-prefs-2026-10-13.md, section 2). Firefox's single
+# "Block AI enhancements" switch would block Translations too, so these are separate.
+
+# Smart tab groups name and suggest groups with a local model.
+- name: browser.tabs.groups.smart.enabled
+  value: false
+
+- name: browser.tabs.groups.smart.userEnabled
+  value: false
+
+# The ML engine that extensions can call.
+- name: extensions.ml.enabled
+  value: false
+
+# Chatbot entries in the page context menu.
+- name: browser.ml.chat.page
+  value: false

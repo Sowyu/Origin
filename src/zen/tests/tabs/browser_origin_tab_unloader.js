@@ -1,0 +1,55 @@
+/* Any copyright is dedicated to the Public Domain.
+   https://creativecommons.org/publicdomain/zero/1.0/ */
+
+"use strict";
+
+const { OriginTabUnloader } = ChromeUtils.importESModule(
+  "chrome://browser/content/zen-components/OriginTabUnloader.sys.mjs"
+);
+
+const isLoaded = tab =>
+  tab.linkedBrowser.isConnected && !tab.hasAttribute("pending");
+
+add_task(async function test_unload_idle_background_tabs() {
+  await SpecialPowers.pushPrefEnv({
+    set: [
+      ["origin.tabs.unload-after-minutes", 1],
+      ["origin.tabs.unload-essentials", false],
+    ],
+  });
+
+  const background = await BrowserTestUtils.openNewForegroundTab(
+    gBrowser,
+    "https://example.com/"
+  );
+  const essential = await BrowserTestUtils.openNewForegroundTab(
+    gBrowser,
+    "https://example.org/"
+  );
+  gZenPinnedTabManager.addToEssentials(essential);
+  const selected = await BrowserTestUtils.openNewForegroundTab(
+    gBrowser,
+    "https://example.net/"
+  );
+
+  // Pretend both background tabs were left five minutes ago.
+  const old = Date.now() - 5 * 60 * 1000;
+  background.updateLastAccessed(old);
+  essential.updateLastAccessed(old);
+  selected.updateLastAccessed(old); // ignored: a selected tab stays at Infinity
+  // Background time counts from session start at the earliest; move it back too.
+  const sessionStart = OriginTabUnloader._sessionStart;
+  OriginTabUnloader._sessionStart = old;
+
+  await OriginTabUnloader.unloadIdleTabs();
+  OriginTabUnloader._sessionStart = sessionStart;
+
+  ok(!isLoaded(background), "An idle background tab unloads");
+  ok(isLoaded(essential), "An Essential stays loaded");
+  ok(isLoaded(selected), "The selected tab stays loaded");
+
+  await SpecialPowers.popPrefEnv();
+  for (const tab of [background, essential, selected]) {
+    await BrowserTestUtils.removeTab(tab);
+  }
+});
