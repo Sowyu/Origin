@@ -44,6 +44,9 @@ from="${1:-1}"
 die() { echo "build-origin-pgo: $*" >&2; exit 1; }
 free_gb() { df -k /System/Volumes/Data | awk 'NR == 2 { print int($4 / 1048576) }'; }
 gui() { sudo -n launchctl asuser 502 sudo -n -u mrm "$@"; }
+# A staged app from an earlier plain build has no profile counters and would waste the profiling run.
+instrumented() { otool -l "$app/Contents/MacOS/XUL" 2>/dev/null | grep -q __llvm_prf_cnts; }
+descendants() { for c in $(pgrep -P "$1"); do echo "$c"; descendants "$c"; done; }
 
 case "$from" in 1|2|3) ;; *) die "usage: build-origin-pgo [2|3] (start stage, default 1)" ;; esac
 
@@ -76,7 +79,7 @@ if [ "$from" -le 2 ]; then
   fi
 fi
 if [ "$from" -eq 2 ]; then
-  [ -x "$app/Contents/MacOS/$bin" ] || die "no instrumented app at $app, start at stage 1"
+  instrumented || die "no instrumented app at $app, start at stage 1"
 fi
 if [ "$from" -eq 3 ]; then
   [ -s "$artifact/merged.profdata" ] && [ -s "$artifact/en-US.log" ] || die "no profile in $artifact, start at stage 1"
@@ -87,7 +90,7 @@ if [ "$from" -le 1 ]; then
   # ZEN_DISABLE_LTO stays 1 from env.sh; profile-generate turns LTO off anyway.
   scripts/build-origin --label pgo-1-instrumented ZEN_GA_DISABLE_PGO= ZEN_GA_GENERATE_PROFILE=1 \
     import locales build stage || die "stage 1 failed"
-  [ -x "$app/Contents/MacOS/$bin" ] || die "stage 1 left no staged app at $app"
+  instrumented || die "stage 1 left no instrumented app at $app"
 fi
 
 if [ "$from" -le 2 ]; then
@@ -104,7 +107,21 @@ if [ "$from" -le 2 ]; then
   gui /usr/bin/env HOME="$HOME" /bin/zsh -c '. "$1/scripts/env.sh" && cd "$1/engine" &&
     export ZEN_GA_GENERATE_PROFILE=1 LLVM_PROFDATA="$2" JARLOG_FILE=en-US.log && unset ZEN_GA_DISABLE_PGO &&
     exec ./mach python build/pgo/profileserver.py --binary "$3" --extended-corpus "$4"' \
-    zsh "$root" "$profdata_tool" "$app/Contents/MacOS/$bin" "$corpus" || die "profiling run failed, see the log above"
+    zsh "$root" "$profdata_tool" "$app/Contents/MacOS/$bin" "$corpus" &
+  run=$!
+  # profileserver.py has no time limit, so a page that never quits (a first-run dialog, a
+  # quitter add-on that did not load) would hang here for good with the hold taken.
+  # ponytail: fixed 45 min limit for a corpus of about 15 min, raise it if a run is slower.
+  ( sleep 2700 && echo "build-origin-pgo: profiling run still going after 45 min, stopping it" >&2 &&
+    kill $(descendants "$run") 2>/dev/null ) &
+  dog=$!
+  rc=0
+  wait "$run" || rc=$?
+  pkill -P "$dog" sleep 2>/dev/null || true
+  if [ "$rc" -ne 0 ]; then
+    rm -f engine/*.profraw
+    die "profiling run failed with exit $rc, see the log above"
+  fi
   end=$(date +%s)
   [ -s engine/merged.profdata ] && [ -s engine/en-US.log ] || die "profiling run left no merged.profdata or en-US.log in engine/"
   stats="$research/logs/build-stats/$(date +%Y-%m-%d-%H%M%S)-pgo-2-profile"
@@ -127,5 +144,8 @@ scripts/build-zen --label pgo-3-final --jobs "$MAKE_JOBS" \
   ZEN_DISABLE_LTO= ZEN_GA_DISABLE_PGO= ZEN_GA_GENERATE_PROFILE= \
   "LDFLAGS=-Wl,--thinlto-jobs=$THINLTO_JOBS -Wl,-cache_path_lto,$lto_cache -Wl,--thinlto-cache-policy=cache_size_bytes=10g" \
   build package || die "stage 3 failed"
+for v in 'MOZ_PROFILE_USE = 1' 'MOZ_LTO = 1' 'MOZ_LTO_RUST_CROSS = thin'; do
+  grep -qx "$v" "$obj/config/autoconf.mk" || die "stage 3 built without $v, see $obj/config/autoconf.mk"
+done
 echo "=== done $(date +%T)"
 ls -l dist/*.dmg
