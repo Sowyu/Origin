@@ -7,11 +7,11 @@ Update this file at the end of every work session. Newest log entry first.
 Milestone 2, the debloat, started 2026-10-13 at 00:10 on the user's word (see Decisions). Milestone 1's measurements finish inside it; its targets and demo fold into milestone 2's demo.
 
 Next action:
-0. 2026-10-13 01:10, the user ran low on usage. Job `after-build` (`../Zen-Origin-research/logs/after-build.sh`, log `after-build.log`) waits for the Origin build, installs `builds/origin-1.23.2b/Origin.app`, runs `scripts/perf/smoke origin`, makes the origin base and split templates and starts the chain `m1` (origin-1 first). If it stopped, read `after-build.log` and `perf.noindex/smoke/origin/smoke.json`. The cuts are still uncommitted in the working tree: commit them once the smoke test passes.
-1. The measurement chain `scripts/perf/m1-batches` runs detached as job `m1` (log `../Zen-Origin-research/logs/m1.log`, pid in `m1.pid`, restarted 2026-10-13 00:20): the rest of baseline-1 (Safari), effects-1 (69 runs, about 4.8 hours), memory-1, then profiler-1. It resumes where it stopped if rerun. Build only through `scripts/perf/hold`, which pauses it between runs.
-2. Four agents work in the tree without building or committing: Boosts; Glance, Space routing, Live folders, Share, Library and media controls; Mods, Welcome and the unlisted cuts; branding (Origin, bundle ID io.github.sowyu.origin, profile folder, placeholder icon, no Zen servers). When they report, review the diff, `git -C engine checkout` any file whose patch was dropped, run `npm run import` and build Origin through `scripts/perf/hold`, then smoke-test it.
-3. Then: research the privatefox and fastfox prefs against the shipped security features, add Origin's prefs (no spare processes, no preloaded new tab page, the effects the effects batch shows are costly), make an `origin` template, and measure Origin on every scenario (3 runs, with the no-browser floor) into batch origin-1.
-4. Report baseline-1, effects-1, memory-1, profiler-1 and origin-1 into `docs/benchmarks.md` and show the user the numbers.
+1. Origin's first build is done and committed (1fc09ba and the commits before it). It passed `scripts/perf/smoke origin`: a copy of the zen-1.23.2b profile opens with 2 spaces, 10 tabs, 2 Essentials and no console errors. Job `after-build` (log `../Zen-Origin-research/logs/after-build.log`) makes the origin base and split templates, then starts the chain `m1`.
+2. The chain `scripts/perf/m1-batches` (job `m1`, log `logs/m1.log`) runs, in order: origin-1 (Origin on every scenario, stock Zen interleaved as a control where things move, plus min-visual and quiet-newtab variants), memory-1, profiler-1, then effects-1. About 9 hours in all. Build only through `scripts/perf/hold`.
+3. When origin-1 is done: `scripts/perf/report origin-1 --out docs/perf/2026-10-13-origin` (inside `scripts/perf/hold`), then `scripts/perf/compare docs/perf/2026-10-13-origin.json docs/perf/2026-10-13-baseline.json --browsers origin,zen-stock,zen-official,firefox,safari --vs zen-stock`, write the results into `docs/benchmarks.md` and show the user the numbers.
+4. Waiting for the next build (origin v2), already in the tree or staged: the startup patch (IP Protection, link preview, content relevancy), the DMG art and Assets.car, lazy loading (agent working), and the open icon set (staged in `../Zen-Origin-research/icon-staging/`, swap with its `swap.sh` after review). Build it with `scripts/detach build-origin scripts/perf/hold scripts/build-origin`, smoke-test, remake the origin templates, and measure launch, idle and the memory variants again.
+5. Then the LTO and PGO build: `scripts/detach build-pgo scripts/perf/hold scripts/build-origin-pgo` (about 2.5 hours, untested), measured against official Zen.
 
 ## Milestones
 
@@ -19,9 +19,9 @@ Next action:
 |---|---|---|
 | 1 | Baseline: build stock Zen, measurement harness, measure Zen, Firefox and Safari, cost of each Zen effect, `docs/cuts.md`, DRM and Sync checks | measurements finishing; targets and demo folded into milestone 2 |
 | 2 | Debloat: Firefox-level cuts, remove cut Zen features and Zen server calls, own bundle ID and profile folder, measure against the baseline | in progress since 2026-10-13 |
-| 3 | Rewrite study (can run beside milestone 2), then wait for the user's decision | not started |
+| 3 | Rewrite study (can run beside milestone 2), then wait for the user's decision | study done (docs/research/rewrite-study-2026-10-13.md: trim, don't rewrite); waiting for the user |
 | 4 | Lean UI: trim or rewrite as decided, meet the energy targets, side-by-side screenshots | not started |
-| 5 | Release: name and icon, signing, update feed, MacBook battery script, `scripts/sync-upstream`, first release | not started |
+| 5 | Release: name and icon, signing, update feed, MacBook battery script, `scripts/sync-upstream`, first release | groundwork: `scripts/sync-upstream` tested, README draft, release and licensing research |
 
 ## Milestone 1 checklist
 
