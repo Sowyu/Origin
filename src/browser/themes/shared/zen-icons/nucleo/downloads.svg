@@ -1,5 +1,4 @@
 #filter dumbComments emptyLines substitution
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
-<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="context-fill" fill-opacity="context-fill-opacity" viewBox="0 0 18 18"><path d="M15.25 11a.75.75 0 0 1 .75.75v1.5A2.75 2.75 0 0 1 13.25 16h-8.5A2.75 2.75 0 0 1 2 13.25v-1.5a.75.75 0 0 1 1.5 0v1.5c0 .69.56 1.25 1.25 1.25h8.5c.69 0 1.25-.56 1.25-1.25v-1.5a.75.75 0 0 1 .75-.75"/><path d="M9 2a.75.75 0 0 1 .75.75v5.69l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.8.8 0 0 1-.244.162q-.048.02-.098.03l-.04.012-.016.003a.8.8 0 0 1-.265 0l-.016-.003-.04-.011q-.05-.012-.098-.03-.044-.02-.083-.045a.8.8 0 0 1-.16-.118l-3.5-3.5a.75.75 0 1 1 1.06-1.06l2.22 2.22V2.75A.75.75 0 0 1 9 2"/></svg>
+# Derived from Phosphor Icons 2.1.1, MIT License, Copyright (c) 2023 Phosphor Icons.
+# See THIRD_PARTY.md at the root of the repository for the license text.
+<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="context-fill" fill-opacity="context-fill-opacity" viewBox="0 0 256 256"><path d="M228,144v64a12,12,0,0,1-12,12H40a12,12,0,0,1-12-12V144a12,12,0,0,1,24,0v52H204V144a12,12,0,0,1,24,0Zm-108.49,8.49a12,12,0,0,0,17,0l40-40a12,12,0,0,0-17-17L140,115V32a12,12,0,0,0-24,0v83L96.49,95.51a12,12,0,0,0-17,17Z"/></svg>

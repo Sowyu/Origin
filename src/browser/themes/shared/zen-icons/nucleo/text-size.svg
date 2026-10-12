@@ -1,31 +1,4 @@
 #filter dumbComments emptyLines substitution
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg
-   x="0px"
-   y="0px"
-   width="18px"
-   height="18px"
-   viewBox="0 0 18 18"
-   version="1.1"
-   id="svg2"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:svg="http://www.w3.org/2000/svg">
-  <defs
-     id="defs2" />
-  <g
-     stroke-linecap="round"
-     stroke-width="1.5"
-     fill="none"
-     stroke="context-fill"
-     stroke-opacity="context-fill-opacity"
-     stroke-linejoin="round"
-     class="nc-icon-wrapper"
-     id="g2">
-    <path
-       id="line2"
-       d="M 1.38,11.75 H 5.7160001 M 6.346,13.25 3.616,6.75 H 3.48 l -2.73,6.5 m 9.49,-2.5 h 6.040001 M 17.25,13.25 13.565,3.75 h -0.61 l -3.685,9.5" />
-  </g>
-</svg>
+# Derived from Phosphor Icons 2.1.1, MIT License, Copyright (c) 2023 Phosphor Icons.
+# See THIRD_PARTY.md at the root of the repository for the license text.
+<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="context-fill" fill-opacity="context-fill-opacity" viewBox="0 0 256 256"><path d="M90.86,50.89a12,12,0,0,0-21.72,0l-64,136a12,12,0,0,0,21.71,10.22L42.44,164h75.12l15.58,33.11a12,12,0,0,0,21.72-10.22ZM53.74,140,80,84.18,106.27,140ZM200,84c-13.85,0-24.77,3.86-32.45,11.48a12,12,0,1,0,16.9,17c3-3,8.26-4.52,15.55-4.52,11,0,20,7.18,20,16v4.39A47.28,47.28,0,0,0,200,124c-24.26,0-44,17.94-44,40s19.74,40,44,40a47.18,47.18,0,0,0,22-5.38A12,12,0,0,0,244,192V124C244,101.94,224.26,84,200,84Zm0,96c-11,0-20-7.18-20-16s9-16,20-16,20,7.18,20,16S211,180,200,180Z"/></svg>
