@@ -1,0 +1,465 @@
+#!/usr/bin/python3
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Freezes the pages in fixtures/pages.json into static local sites and writes the manifest.
+
+Usage: scripts/perf/make-fixtures [--refresh] [--verify] [name ...]
+  --refresh  drop the download cache and fetch everything again
+  --verify   only check the files against fixtures/manifest.sha256
+Output: ../Zen-Origin-research/fixtures/sites/<name>/index.html plus assets/.
+Each site is served at http://<name>.localhost:8765/ so every rewritten URL is root-relative.
+Raw downloads are cached in ../Zen-Origin-research/downloads/page-cache, so a rerun gives the same files.
+"""
+import hashlib, html, json, os, re, shutil, subprocess, sys, threading, time, urllib.request, urllib.error, zipfile
+from html.parser import HTMLParser
+from urllib.parse import urljoin, urlsplit, urldefrag
+from concurrent.futures import ThreadPoolExecutor
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+FIX = os.path.join(HERE, "fixtures")
+RESEARCH = os.path.abspath(os.path.join(HERE, "..", "..", "..", "Zen-Origin-research"))
+OUT = os.path.join(RESEARCH, "fixtures")
+SITES = os.path.join(OUT, "sites")
+CACHE = os.path.join(RESEARCH, "downloads", "page-cache")
+LOG = os.path.join(RESEARCH, "logs", "fixtures-freeze.log")
+MANIFEST = os.path.join(FIX, "manifest.sha256")
+UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15"
+MAX_ASSET = 12 * 1024 * 1024
+VIDEO_ZIP_URL = "https://download.blender.org/demo/movies/BBB/bbb_sunflower_1080p_30fps_normal.mp4.zip"
+VIDEO_DIR = os.path.join(RESEARCH, "downloads", "bbb")
+VIDEO_OUT = os.path.join(SITES, "media", "bbb-1080p30-130s.mp4")
+
+DROP_RELS = {"preload", "prefetch", "preconnect", "dns-prefetch", "modulepreload", "prerender", "manifest"}
+VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
+CT_EXT = {"image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/gif": "gif", "image/webp": "webp",
+          "image/avif": "avif", "image/svg+xml": "svg", "image/x-icon": "ico", "image/vnd.microsoft.icon": "ico",
+          "image/bmp": "bmp", "text/css": "css", "font/woff2": "woff2", "font/woff": "woff", "font/ttf": "ttf",
+          "font/otf": "otf", "application/font-woff": "woff", "application/font-woff2": "woff2",
+          "application/x-font-woff": "woff", "application/x-font-ttf": "ttf", "application/vnd.ms-fontobject": "eot",
+          "application/x-font-opentype": "otf", "font/sfnt": "ttf"}
+KNOWN_EXT = set(CT_EXT.values()) | {"jpeg"}
+
+loglock = threading.Lock()
+
+
+def log(page, msg):
+    line = "[%s] %s" % (page, msg)
+    with loglock:
+        print(line, flush=True)
+        os.makedirs(os.path.dirname(LOG), exist_ok=True)
+        with open(LOG, "a") as f:
+            f.write(line + "\n")
+
+
+def sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+class Freezer:
+    def __init__(self, page):
+        self.name = page["name"]
+        self.url = page["url"]
+        self.archive = page.get("archive", False)
+        self.dir = os.path.join(SITES, self.name)
+        self.assets = {}     # absolute url -> "/assets/x.ext" or None when it failed
+        self.counts = {"img": 0, "css": 0, "font": 0, "other": 0}
+        self.busy = set()
+        self.skipped = 0
+
+    # network
+
+    def _get(self, url):
+        key = hashlib.sha1(url.encode()).hexdigest()
+        cdir = os.path.join(CACHE, self.name)
+        body_p, meta_p = os.path.join(cdir, key + ".body"), os.path.join(cdir, key + ".ct")
+        if os.path.exists(body_p) and os.path.exists(meta_p):
+            return open(body_p, "rb").read(), open(meta_p).read()
+        urls = [url]
+        if self.archive:
+            urls.append("https://web.archive.org/web/2025id_/" + url)
+        last = None
+        for u in urls:
+            for attempt in range(3):
+                try:
+                    req = urllib.request.Request(u, headers={
+                        "User-Agent": UA, "Accept-Language": "en-US",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Referer": self.url})
+                    with urllib.request.urlopen(req, timeout=40) as r:
+                        data = r.read(MAX_ASSET + 1) if u != self.url else r.read()
+                        ct = r.headers.get("Content-Type", "")
+                    if len(data) > MAX_ASSET and u != self.url:
+                        raise ValueError("larger than %d bytes" % MAX_ASSET)
+                    os.makedirs(cdir, exist_ok=True)
+                    open(body_p, "wb").write(data)
+                    open(meta_p, "w").write(ct)
+                    return data, ct
+                except urllib.error.HTTPError as e:
+                    last = e
+                    if e.code in (429, 503):
+                        time.sleep(2 * (attempt + 1))
+                        continue
+                    break
+                except Exception as e:
+                    last = e
+                    time.sleep(1)
+        raise last
+
+    # assets
+
+    def asset(self, raw, base, kind=None, depth=0):
+        """Download raw (resolved against base) and return its local root-relative path, or None."""
+        raw = raw.strip()
+        if not raw or raw.startswith(("data:", "blob:", "about:", "javascript:", "#")):
+            return raw if raw.startswith("data:") else None
+        absu, frag = urldefrag(urljoin(base, raw))
+        if urlsplit(absu).scheme not in ("http", "https"):
+            return None
+        if absu in self.assets:
+            r = self.assets[absu]
+            return None if r is None else r + (("#" + frag) if frag else "")
+        if absu in self.busy or depth > 5:
+            return None
+        self.busy.add(absu)
+        local = None
+        try:
+            data, ct = self._get(absu)
+            ctype = ct.split(";")[0].strip().lower()
+            ext = CT_EXT.get(ctype)
+            if ext is None:
+                e = os.path.splitext(urlsplit(absu).path)[1].lstrip(".").lower()
+                ext = e if e in KNOWN_EXT else ("css" if kind == "css" else "bin")
+            if ext == "jpeg":
+                ext = "jpg"
+            if ctype == "text/html" or (ext == "bin" and data[:15].lower().startswith((b"<!doctype html", b"<html"))):
+                raise ValueError("got an HTML page instead of an asset")
+            if ext == "css":
+                text = data.decode("utf-8", "replace")
+                text = self.css(text, absu, depth + 1)
+                data = text.encode("utf-8")
+            name = hashlib.sha1(absu.encode()).hexdigest()[:12] + "." + ext
+            os.makedirs(os.path.join(self.dir, "assets"), exist_ok=True)
+            with open(os.path.join(self.dir, "assets", name), "wb") as f:
+                f.write(data)
+            local = "/assets/" + name
+            grp = "css" if ext == "css" else "font" if ext in ("woff", "woff2", "ttf", "otf", "eot") else \
+                "img" if ext in ("jpg", "png", "gif", "webp", "avif", "svg", "ico", "bmp") else "other"
+            self.counts[grp] += 1
+        except Exception as e:
+            self.skipped += 1
+            log(self.name, "skipped %s (%s)" % (absu, e))
+        finally:
+            self.busy.discard(absu)
+        self.assets[absu] = local
+        return None if local is None else local + (("#" + frag) if frag else "")
+
+    _import = re.compile(r"""@import\s+(?!url\()(["'])(.*?)\1""", re.I)
+    _url = re.compile(r"""url\(\s*(["']?)(.*?)\1\s*\)""", re.I | re.S)
+
+    def css(self, text, base, depth=0):
+        def imp(m):
+            p = self.asset(m.group(2), base, "css", depth)
+            return '@import "%s"' % (p or "")
+        def url(m):
+            raw = m.group(2).strip()
+            if raw.startswith("data:") or raw.startswith("#"):
+                return m.group(0)
+            p = self.asset(raw, base, None, depth)
+            return 'url("%s")' % (p or "")
+        text = self._import.sub(imp, text)
+        # @import url(x) is covered by the url() pass, and the response type decides if it is CSS
+        return self._url.sub(url, text)
+
+    def srcset(self, value, base):
+        out, i, n = [], 0, len(value)
+        while i < n:
+            while i < n and (value[i].isspace() or value[i] == ","):
+                i += 1
+            j = i
+            while j < n and not value[j].isspace():
+                j += 1
+            u, desc = value[i:j], ""
+            if u.endswith(","):
+                u = u.rstrip(",")
+            else:
+                k = value.find(",", j)
+                k = n if k < 0 else k
+                desc = value[j:k].strip()
+                j = k
+            i = j
+            if not u:
+                continue
+            p = self.asset(u, base)
+            if p:
+                out.append((p + " " + desc).strip())
+        return ", ".join(out)
+
+    # html
+
+    def freeze(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+        os.makedirs(self.dir)
+        data, ct = self._get(self.url)
+        m = re.search(r"charset=([\w-]+)", ct, re.I) or re.search(rb"""<meta[^>]+charset=["']?([\w-]+)""", data[:4096], re.I)
+        enc = (m.group(1).decode() if isinstance(m.group(1), bytes) else m.group(1)) if m else "utf-8"
+        try:
+            text = data.decode(enc, "replace")
+        except LookupError:
+            text = data.decode("utf-8", "replace")
+        p = HtmlRewriter(self)
+        p.feed(text)
+        p.close()
+        out = "".join(p.out)
+        if re.search(r"<head(?:\s[^>]*)?>", out, re.I):
+            out = re.sub(r"(<head(?:\s[^>]*)?>)", r'\1<meta charset="utf-8">', out, count=1, flags=re.I)
+        else:
+            out = '<meta charset="utf-8">' + out
+        with open(os.path.join(self.dir, "index.html"), "w", encoding="utf-8") as f:
+            f.write(out)
+        c = self.counts
+        log(self.name, "frozen %d bytes html, %d img tags, %d stylesheet links, %d inline styles; assets: %d images, %d css, %d fonts, %d other; %d skipped"
+            % (len(out.encode()), p.n_img, p.n_link_css, p.n_style, c["img"], c["css"], c["font"], c["other"], self.skipped))
+        return {"name": self.name, "html_bytes": len(out.encode()), "img_tags": p.n_img, "img_assets": c["img"],
+                "css_assets": c["css"], "fonts": c["font"], "skipped": self.skipped,
+                "text_chars": p.text_chars}
+
+
+class HtmlRewriter(HTMLParser):
+    def __init__(self, fz):
+        super().__init__(convert_charrefs=False)
+        self.fz = fz
+        self.base = fz.url
+        self.out = []
+        self.skip = None        # "iframe" while inside one
+        self.in_style = False
+        self.style_buf = []
+        self.noscript = 0
+        self.in_body = False
+        self.n_img = self.n_link_css = self.n_style = self.text_chars = 0
+
+    def tagtext(self, tag, attrs, selfclose):
+        s = "<" + tag
+        for k, v in attrs:
+            s += " " + k if v is None else ' %s="%s"' % (k, html.escape(v, quote=True))
+        return s + (" />" if selfclose else ">")
+
+    def rewrite(self, tag, attrs):
+        """Returns the new attrs list, or None to drop the element."""
+        a = {k: v for k, v in attrs}
+        fz, base = self.fz, self.base
+        if tag == "base":
+            if a.get("href"):
+                self.base = urljoin(self.fz.url, a["href"])
+            return None
+        if tag == "meta" and (a.get("http-equiv") or "").lower() == "refresh":
+            return None
+        if tag == "link":
+            rels = set((a.get("rel") or "").lower().split())
+            if "preload" in rels and (a.get("as") or "").lower() == "style" and "onload" in a:
+                a["rel"], rels = "stylesheet", {"stylesheet"}
+            if rels & DROP_RELS:
+                return None
+            if "stylesheet" in rels:
+                if (a.get("media") or "").lower() == "print" and "media" in (a.get("onload") or ""):
+                    del a["media"]
+                self.n_link_css += 1
+                a["href"] = fz.asset(a.get("href", ""), base, "css") or ""
+            elif rels & {"icon", "shortcut", "apple-touch-icon", "apple-touch-icon-precomposed", "mask-icon", "image_src"}:
+                a["href"] = fz.asset(a.get("href", ""), base) or ""
+            elif a.get("href"):
+                a["href"] = urljoin(base, a["href"])
+        if tag == "img":
+            self.n_img += 1
+            for lazy, real in (("data-src", "src"), ("data-srcset", "srcset")):
+                if a.get(lazy) and (not a.get(real) or a[real].startswith("data:")):
+                    a[real] = a[lazy]
+        for k in list(a):
+            v = a[k]
+            lk = k.lower()
+            if lk.startswith("on") or lk in ("integrity", "nonce"):
+                del a[k]
+            elif v is None:
+                continue
+            elif lk == "style":
+                a[k] = fz.css(v, base)
+            elif lk in ("srcset", "imagesrcset"):
+                a[k] = fz.srcset(v, base)
+            elif lk in ("src", "poster", "data") and tag != "link":
+                if tag in ("video", "audio", "track", "embed", "object", "source"):
+                    a[k] = ""
+                else:
+                    a[k] = fz.asset(v, base) or ("" if not v.strip().startswith("data:") else v)
+            elif lk in ("href", "xlink:href"):
+                if tag in ("use", "image", "feimage") and not v.startswith("#"):
+                    a[k] = fz.asset(v, base) or ""
+                elif tag in ("a", "area") and v.strip() and not v.startswith(("#", "javascript:", "data:", "mailto:")):
+                    a[k] = urljoin(base, v)
+            elif lk == "action" and v.strip():
+                a[k] = urljoin(base, v)
+        return [(k, a[k]) for k, _ in attrs if k in a] + [(k, v) for k, v in a.items() if k not in dict(attrs)]
+
+    def handle_starttag(self, tag, attrs, selfclose=False):
+        if self.skip:
+            if tag == "iframe":
+                pass
+            return
+        if tag == "script":
+            self.skip = "script"
+            return
+        if tag == "iframe":
+            self.skip = "iframe"
+            return
+        raw = self.get_starttag_text()
+        if self.noscript and tag != "noscript":
+            self.out.append(raw)
+            return
+        if tag == "noscript":
+            self.noscript += 1
+            self.out.append(raw)
+            return
+        if tag == "style":
+            self.in_style = True
+            self.style_buf = []
+            self.n_style += 1
+        if tag == "body":
+            self.in_body = True
+        if selfclose and tag == "script":
+            return
+        new = self.rewrite(tag, attrs)
+        if new is None:
+            return
+        self.out.append(self.tagtext(tag, new, selfclose))
+
+    def handle_startendtag(self, tag, attrs):
+        if tag in ("script", "iframe"):
+            return
+        self.handle_starttag(tag, attrs, True)
+
+    def handle_endtag(self, tag):
+        if self.skip:
+            if tag == self.skip:
+                self.skip = None
+            return
+        if tag == "style" and self.in_style:
+            self.in_style = False
+            self.out.append(self.fz.css("".join(self.style_buf), self.base))
+        if tag == "noscript" and self.noscript:
+            self.noscript -= 1
+        if tag in VOID:
+            return
+        self.out.append("</%s>" % tag)
+
+    def _emit(self, s):
+        if self.skip:
+            return
+        (self.style_buf if self.in_style else self.out).append(s)
+
+    def handle_data(self, data):
+        if self.in_body and not self.skip and not self.in_style:
+            self.text_chars += len(data.strip())
+        self._emit(data)
+
+    def handle_entityref(self, name):
+        self._emit("&%s;" % name)
+
+    def handle_charref(self, name):
+        self._emit("&#%s;" % name)
+
+    def handle_comment(self, data):
+        if not self.skip and not data.lstrip().startswith(("[if", "<![endif")):
+            self.out.append("<!--%s-->" % data)
+
+    def handle_decl(self, decl):
+        self._emit("<!%s>" % decl)
+
+    def unknown_decl(self, data):
+        self._emit("<![%s]>" % data)
+
+    def handle_pi(self, data):
+        pass
+
+
+def video():
+    if os.path.exists(VIDEO_OUT):
+        return
+    os.makedirs(VIDEO_DIR, exist_ok=True)
+    zp = os.path.join(VIDEO_DIR, os.path.basename(VIDEO_ZIP_URL))
+    src = os.path.join(VIDEO_DIR, "bbb_sunflower_1080p_30fps_normal.mp4")
+    if not os.path.exists(src):
+        if not os.path.exists(zp):
+            print("downloading", VIDEO_ZIP_URL, flush=True)
+            urllib.request.urlretrieve(VIDEO_ZIP_URL, zp)
+        with zipfile.ZipFile(zp) as z:
+            z.extract("bbb_sunflower_1080p_30fps_normal.mp4", VIDEO_DIR)
+    os.makedirs(os.path.dirname(VIDEO_OUT), exist_ok=True)
+    # Stream copy only, no re-encode. The file has an MP3 stereo and an AC3 5.1 track.
+    # Take the MP3 one (first audio track) because Firefox cannot decode AC3.
+    subprocess.check_call(["/opt/homebrew/bin/ffmpeg", "-y", "-v", "error", "-i", src, "-t", "130", "-map", "0:v:0", "-map", "0:a:0", "-c", "copy",
+                           "-movflags", "+faststart", VIDEO_OUT])
+
+
+def synthetic():
+    base = os.path.join(FIX, "synthetic")
+    for name in sorted(os.listdir(base)):
+        dst = os.path.join(SITES, name)
+        os.makedirs(dst, exist_ok=True)
+        for f in os.listdir(os.path.join(base, name)):
+            shutil.copy2(os.path.join(base, name, f), os.path.join(dst, f))
+
+
+def manifest_lines():
+    lines = []
+    for root, _, files in os.walk(OUT):
+        for f in files:
+            p = os.path.join(root, f)
+            lines.append("%s  %s" % (sha256(p), os.path.relpath(p, OUT)))
+    return sorted(lines, key=lambda l: l.split("  ", 1)[1])
+
+
+def verify():
+    want = open(MANIFEST).read().splitlines()
+    have = manifest_lines()
+    if want == have:
+        print("fixtures match the manifest (%d files)" % len(have))
+        return 0
+    w, h = set(want), set(have)
+    for l in sorted(w - h):
+        print("changed or missing:", l.split("  ", 1)[1])
+    for l in sorted(h - w):
+        print("changed or extra:  ", l.split("  ", 1)[1])
+    return 1
+
+
+def main():
+    args = sys.argv[1:]
+    if "--verify" in args:
+        sys.exit(verify())
+    if "--refresh" in args:
+        shutil.rmtree(CACHE, ignore_errors=True)
+    names = [a for a in args if not a.startswith("--")]
+    pages = json.load(open(os.path.join(FIX, "pages.json")))
+    if names:
+        pages = [p for p in pages if p["name"] in names]
+    os.makedirs(SITES, exist_ok=True)
+    open(LOG, "w").close()
+    with ThreadPoolExecutor(4) as ex:
+        futs = [(p["name"], ex.submit(Freezer(p).freeze)) for p in pages]
+    for name, f in futs:
+        try:
+            f.result()
+        except Exception as e:
+            log(name, "FAILED %r" % e)
+    synthetic()
+    video()
+    with open(MANIFEST, "w") as f:
+        f.write("\n".join(manifest_lines()) + "\n")
+    print("manifest written:", MANIFEST)
+
+
+if __name__ == "__main__":
+    main()

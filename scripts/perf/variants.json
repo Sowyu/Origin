@@ -1,0 +1,58 @@
+{
+  "_comment": "One Zen visual effect turned off per variant, on top of the standard template. Switches come from docs/research/zen-effects-2026-10-12.md. 'scenarios' lists where the effect can cost something.",
+  "no-vibrancy": {
+    "what": "native window material (ZenWindowMaterialView) replaced by a plain view",
+    "prefs": {"zen.widget.macos.window-vibrancy": false},
+    "scenarios": ["idle", "switch", "scroll", "video-windowed"]
+  },
+  "no-gradient": {
+    "what": "workspace gradient layers hidden",
+    "userchrome": "#zen-browser-background::before, #zen-browser-background::after, #zen-toolbar-background::before, #zen-toolbar-background::after { display: none !important; }\n",
+    "scenarios": ["idle", "switch", "scroll"]
+  },
+  "no-page-shadow": {
+    "what": "shadow of the floating page",
+    "userchrome": "#tabbrowser-tabpanels .browserSidebarContainer { box-shadow: none !important; }\n",
+    "scenarios": ["idle", "scroll", "video-windowed"]
+  },
+  "no-page-radius": {
+    "what": "rounded corners of the floating page",
+    "userchrome": "#tabbrowser-tabpanels .browserSidebarContainer { border-radius: 0 !important; }\n",
+    "scenarios": ["idle", "scroll", "video-windowed"]
+  },
+  "no-squircle": {
+    "what": "squircle corner shapes across the UI",
+    "prefs": {"layout.css.corner-shape.enabled": false},
+    "scenarios": ["idle", "scroll"]
+  },
+  "no-space-animation": {
+    "what": "workspace switch animation",
+    "prefs": {"zen.workspaces.switch-animation-duration": 0},
+    "scenarios": ["switch"]
+  },
+  "reduced-motion": {
+    "what": "Reduce Motion as the system setting would set it (many animations at once)",
+    "prefs": {"ui.prefersReducedMotion": 1},
+    "scenarios": ["switch", "sidebar", "split"]
+  },
+  "no-compact-animation": {
+    "what": "compact mode sidebar slide",
+    "prefs": {"zen.view.compact.animate-sidebar": false},
+    "scenarios": ["sidebar"]
+  },
+  "no-essentials-bg": {
+    "what": "blurred favicon background behind Essentials",
+    "prefs": {"zen.theme.essentials-favicon-bg": false},
+    "scenarios": ["idle", "switch"]
+  },
+  "no-loading-bar": {
+    "what": "Zen's page loading bar",
+    "prefs": {"zen.view.enable-loading-indicator": false},
+    "scenarios": ["launch"]
+  },
+  "no-native-popovers": {
+    "what": "native NSPopover arrow panels (Zen turns them on; Firefox ships them off)",
+    "prefs": {"widget.macos.native-popovers": false},
+    "scenarios": ["idle"]
+  }
+}

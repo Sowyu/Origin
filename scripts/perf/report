@@ -1,0 +1,235 @@
+#!/usr/bin/python3
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Turns raw runs into numbers: one row per browser, scenario and window, median and range of runs.
+
+Usage: scripts/perf/report <batch> [<batch> ...] [--out docs/perf/<name>] [--json]
+
+Per window it reports, from kernel coalition counters (zo-stat): the app's power (its coalition's
+energy over the window), CPU, wakeups, GPU time, disk writes and footprint; WindowServer's power
+and CPU over the same window; and from powermetrics the whole machine's CPU+GPU+ANE power.
+Gecko runs made with --profiler also give RefreshDriverTick markers on the parent main thread.
+"""
+import argparse, glob, json, os, statistics, sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import zo
+
+WS_COALITION_NAME = "com.apple.WindowServer"
+
+
+def lines(path):
+    return [json.loads(l) for l in open(path) if l.strip()]
+
+
+def delta(a, b, key):
+    return (b.get(key, 0) or 0) - (a.get(key, 0) or 0)
+
+
+def coalition_metrics(first, last):
+    """Rates over the window from two zo-stat samples."""
+    dur = (last["t_ns"] - first["t_ns"]) / 1e9
+    if dur <= 0:
+        return None
+    c0, c1 = first.get("coalition", {}), last.get("coalition", {})
+    w0, w1 = first.get("windowserver", {}), last.get("windowserver", {})
+    m = {
+        "seconds": round(dur, 2),
+        "app_mw": delta(c0, c1, "energy_nj") / dur / 1e6,
+        "app_cpu_pct": delta(c0, c1, "cpu_time_ns") / dur / 1e7,
+        "app_wakeups_s": (delta(c0, c1, "interrupt_wakeups") + delta(c0, c1, "platform_idle_wakeups")) / dur,
+        "app_gpu_ms_s": delta(c0, c1, "gpu_time_ns") / dur / 1e6,
+        "app_gpu_mw": delta(c0, c1, "gpu_energy_nj") / dur / 1e6,
+        "app_billed_to_me_mw": delta(c0, c1, "energy_billed_to_me_nj") / dur / 1e6,
+        "app_disk_kb_s": delta(c0, c1, "bytes_written") / dur / 1024,
+        "ws_mw": delta(w0, w1, "energy_nj") / dur / 1e6,
+        "ws_cpu_pct": delta(w0, w1, "cpu_time_ns") / dur / 1e7,
+        "ws_gpu_ms_s": delta(w0, w1, "gpu_time_ns") / dur / 1e6,
+        "footprint_mb": sum(p.get("footprint", 0) for p in last.get("processes", [])) / 1048576,
+        "processes": len(last.get("processes", [])),
+    }
+    m["app_plus_ws_mw"] = m["app_mw"] + m["ws_mw"]
+    # Per process role: Gecko children carry their type as the last argument (tab, gpu, rdd, ...).
+    before = {p["pid"]: p for p in first.get("processes", [])}
+    roles = {}
+    for p in last.get("processes", []):
+        a = before.get(p["pid"], {})
+        role = p.get("role", "")
+        role = role if role in ("tab", "gpu", "rdd", "socket", "utility", "forkserver", "gmplugin") else (
+            "parent" if p["pid"] == last["pid"] else p.get("name", "?"))
+        r = roles.setdefault(role, {"cpu_pct": 0.0, "mw": 0.0, "wakeups_s": 0.0, "count": 0})
+        r["cpu_pct"] += delta(a, p, "cpu_ns") / dur / 1e7
+        r["mw"] += delta(a, p, "energy_nj") / dur / 1e6
+        r["wakeups_s"] += (delta(a, p, "interrupt_wakeups") + delta(a, p, "pkg_idle_wakeups")) / dur
+        r["count"] += 1
+    m["roles"] = roles
+    return m
+
+
+def powermetrics_metrics(path, coalition_id):
+    try:
+        samples = zo.read_powermetrics(path)
+    except Exception:
+        return {}
+    if not samples:
+        return {}
+    proc = [s.get("processor", {}) for s in samples]
+    out = {
+        "sys_combined_mw": statistics.mean(p.get("combined_power", 0) for p in proc),
+        "sys_cpu_mw": statistics.mean(p.get("cpu_power", 0) for p in proc),
+        "sys_gpu_mw": statistics.mean(p.get("gpu_power", 0) for p in proc),
+        "pm_samples": len(samples),
+    }
+    ei_app, ei_ws = [], []
+    for s in samples:
+        for c in s.get("coalitions", []):
+            if coalition_id is not None and c.get("id") == coalition_id:
+                ei_app.append(c.get("energy_impact_per_s", 0))
+            if c.get("name") == WS_COALITION_NAME:
+                ei_ws.append(c.get("energy_impact_per_s", 0))
+    if ei_app:
+        out["app_energy_impact"] = statistics.mean(ei_app)
+    if ei_ws:
+        out["ws_energy_impact"] = statistics.mean(ei_ws)
+    return out
+
+
+def refresh_ticks(profile_path, t0_ms, t1_ms):
+    """RefreshDriverTick markers on the parent process main thread inside [t0, t1] (epoch ms)."""
+    try:
+        prof = json.load(open(profile_path))
+    except Exception:
+        return None
+    start = prof.get("meta", {}).get("startTime", 0)
+    for th in prof.get("threads", []):
+        if th.get("name") != "GeckoMain":
+            continue
+        strings = th.get("stringTable", [])
+        schema = th.get("markers", {}).get("schema", {"name": 0, "startTime": 1})
+        count = 0
+        for row in th.get("markers", {}).get("data", []):
+            name = row[schema["name"]]
+            name = strings[name] if isinstance(name, int) and name < len(strings) else name
+            t = row[schema["startTime"]]
+            if name == "RefreshDriverTick" and t is not None and t0_ms <= start + t <= t1_ms:
+                count += 1
+        return {"ticks": count, "ticks_per_s": count / max(0.001, (t1_ms - t0_ms) / 1000)}
+    return None
+
+
+def run_rows(run_dir):
+    meta = json.load(open(os.path.join(run_dir, "meta.json")))
+    rows = []
+    if meta.get("skipped"):
+        return meta, rows
+    for w in meta.get("windows", []):
+        name = w["name"]
+        if name == "launch-power":
+            continue
+        st = os.path.join(run_dir, f"{name}.zostat.jsonl")
+        if not os.path.exists(st):
+            continue
+        samples = lines(st)
+        if w.get("cumulative"):
+            last = samples[-1]
+            zero = {"t_ns": last["t_ns"] - (w["t1_ms"] - w["t0_ms"]) * 1e6, "coalition": {}, "windowserver": last["windowserver"],
+                    "processes": [], "pid": last["pid"]}
+            m = coalition_metrics(zero, last)
+            m.pop("ws_mw"); m.pop("ws_cpu_pct"); m.pop("ws_gpu_ms_s"); m.pop("app_plus_ws_mw")
+            m["app_energy_j"] = last["coalition"].get("energy_nj", 0) / 1e9
+            m["first_paint_ms"] = meta.get("first_paint_ms")
+            pm = os.path.join(run_dir, "launch-power.powermetrics.plist")
+            if os.path.exists(pm):
+                m.update(powermetrics_metrics(pm, last.get("coalition_id")))
+        else:
+            if len(samples) < 2:
+                continue
+            m = coalition_metrics(samples[0], samples[-1])
+            m.update(powermetrics_metrics(os.path.join(run_dir, f"{name}.powermetrics.plist"), samples[0].get("coalition_id")))
+        prof = os.path.join(run_dir, "profile.json")
+        if os.path.exists(prof) and not w.get("cumulative"):
+            m["refresh"] = refresh_ticks(prof, w["t0_ms"], w["t1_ms"])
+        m["noisy"] = meta.get("quiet", {}).get("noisy", False)
+        rows.append((name, m))
+    return meta, rows
+
+
+KEYS = ["app_mw", "ws_mw", "app_plus_ws_mw", "sys_combined_mw", "app_cpu_pct", "app_wakeups_s",
+        "app_gpu_ms_s", "ws_gpu_ms_s", "app_disk_kb_s", "footprint_mb", "first_paint_ms", "app_energy_j",
+        "app_energy_impact"]
+
+
+def summarize(batches):
+    table = {}
+    for batch in batches:
+        for meta_path in glob.glob(os.path.join(zo.RUNS, batch, "*", "*", "r*", "meta.json")):
+            run_dir = os.path.dirname(meta_path)
+            label = run_dir.split(os.sep)[-3]
+            meta, rows = run_rows(run_dir)
+            for name, m in rows:
+                table.setdefault((label, meta["scenario"], name), []).append(m)
+    out = []
+    for (label, scenario, window), runs in sorted(table.items()):
+        row = {"browser": label, "scenario": scenario, "window": window, "runs": len(runs),
+               "noisy_runs": sum(1 for r in runs if r.get("noisy"))}
+        for k in KEYS:
+            vals = [r[k] for r in runs if r.get(k) is not None]
+            if vals:
+                row[k] = {"median": statistics.median(vals), "min": min(vals), "max": max(vals)}
+        ticks = [r["refresh"]["ticks_per_s"] for r in runs if r.get("refresh")]
+        if ticks:
+            row["refresh_ticks_s"] = {"median": statistics.median(ticks), "min": min(ticks), "max": max(ticks)}
+        roles = {}
+        for r in runs:
+            for role, v in r.get("roles", {}).items():
+                roles.setdefault(role, []).append(v["mw"])
+        row["roles_mw"] = {k: statistics.median(v) for k, v in roles.items()}
+        out.append(row)
+    return out
+
+
+def fmt(cell, digits=0):
+    if not cell:
+        return "n/a"
+    med, lo, hi = cell["median"], cell["min"], cell["max"]
+    f = f"{{:.{digits}f}}"
+    return f"{f.format(med)} ({f.format(lo)} to {f.format(hi)})"
+
+
+def markdown(rows, title):
+    cols = [("app_mw", "app mW", 0), ("ws_mw", "WindowServer mW", 0), ("sys_combined_mw", "machine mW", 0),
+            ("app_cpu_pct", "app CPU %", 1), ("app_wakeups_s", "app wakeups/s", 0), ("footprint_mb", "memory MB", 0)]
+    md = [f"# {title}", "", "Median of the runs, range in brackets. app mW is the browser's whole coalition "
+          "(every process it runs, Safari's WebKit services included) from kernel energy counters; machine mW "
+          "is powermetrics' CPU+GPU+ANE package power and includes everything else running on the Mac.", ""]
+    md.append("| browser | scenario | window | runs | " + " | ".join(c[1] for c in cols) + " |")
+    md.append("|---" * (4 + len(cols)) + "|")
+    for r in rows:
+        md.append(f"| {r['browser']} | {r['scenario']} | {r['window']} | {r['runs']}"
+                  + (f" ({r['noisy_runs']} noisy)" if r['noisy_runs'] else "") + " | "
+                  + " | ".join(fmt(r.get(k), d) for k, _, d in cols) + " |")
+    extra = [r for r in rows if r.get("first_paint_ms") or r.get("refresh_ticks_s")]
+    if extra:
+        md += ["", "| browser | scenario | first paint ms | launch energy J | refresh driver ticks/s |", "|---|---|---|---|---|"]
+        for r in extra:
+            md.append(f"| {r['browser']} | {r['scenario']} | {fmt(r.get('first_paint_ms'))} | "
+                      f"{fmt(r.get('app_energy_j'), 1)} | {fmt(r.get('refresh_ticks_s'), 1)} |")
+    return "\n".join(md) + "\n"
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("batches", nargs="+")
+    p.add_argument("--out", help="path prefix for .json and .md (for example docs/perf/2026-10-13-baseline)")
+    a = p.parse_args()
+    rows = summarize(a.batches)
+    text = markdown(rows, " + ".join(a.batches))
+    if a.out:
+        json.dump(rows, open(a.out + ".json", "w"), indent=1)
+        open(a.out + ".md", "w").write(text)
+    print(text)
+
+
+if __name__ == "__main__":
+    main()

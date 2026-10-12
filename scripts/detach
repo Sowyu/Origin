@@ -1,0 +1,26 @@
+#!/bin/sh
+# Runs a long job in its own session so harness time limits and shell exits don't kill it.
+# (nohup fails here: there is no controlling terminal.)
+# Usage: scripts/detach <name> <command> [args...]
+# Log: ../Zen-Origin-research/logs/<name>.log, PID: ../Zen-Origin-research/logs/<name>.pid,
+# exit status: ../Zen-Origin-research/logs/<name>.exit once the job ends.
+set -eu
+[ $# -ge 2 ] || { echo "usage: scripts/detach <name> <command> [args...]" >&2; exit 2; }
+logs="$(cd "$(dirname "$0")/../.." && pwd)/Zen-Origin-research/logs"
+mkdir -p "$logs"
+name="$1"; shift
+if [ -f "$logs/$name.pid" ] && kill -0 "$(cat "$logs/$name.pid")" 2>/dev/null; then
+  echo "$name already running, pid $(cat "$logs/$name.pid")" >&2; exit 1
+fi
+rm -f "$logs/$name.exit"
+/usr/bin/python3 - "$logs" "$name" "$@" <<'PY'
+import os, subprocess, sys
+logs, name, cmd = sys.argv[1], sys.argv[2], sys.argv[3:]
+log = open(os.path.join(logs, name + ".log"), "ab")
+# The wrapper shell records the exit status, so a finished job can be told from a killed one.
+wrapped = ["/bin/sh", "-c", '"$@"; echo $? > "$0"', os.path.join(logs, name + ".exit")] + cmd
+p = subprocess.Popen(wrapped, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                     start_new_session=True, close_fds=True)
+open(os.path.join(logs, name + ".pid"), "w").write(str(p.pid))
+print(p.pid)
+PY

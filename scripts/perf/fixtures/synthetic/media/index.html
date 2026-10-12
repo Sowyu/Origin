@@ -1,0 +1,32 @@
+<!--
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>media</title>
+<style>
+html, body { margin: 0; background: #000; height: 100%; }
+video { width: 1280px; height: 720px; display: block; background: #000; }
+</style>
+</head>
+<body>
+<video id="v" width="1280" height="720" src="/bbb-1080p30-130s.mp4" preload="auto"></video>
+<script>
+var video = document.getElementById("v");
+var mode = new URLSearchParams(location.search).get("mode");
+video.addEventListener("playing", function () { document.title = "playing"; });
+video.addEventListener("ended", function () { document.title = "ended"; });
+document.addEventListener("click", function () {
+  if (mode === "windowed") {
+    video.play();
+  } else if (mode === "fullscreen") {
+    video.requestFullscreen().then(function () { video.play(); }, function () { video.play(); });
+  }
+});
+</script>
+</body>
+</html>

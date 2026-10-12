@@ -1,0 +1,10 @@
+#!/bin/sh
+# Builds the harness tools into ../Zen-Origin-research/tools/perf: zo-ui (input, windows, pixels)
+# and zo-stat (kernel counters). They post input and read the screen, so the shell's responsible
+# app needs Accessibility and Screen Recording.
+set -eu
+here="$(cd "$(dirname "$0")" && pwd)"
+out="$(cd "$here/../../.." && pwd)/Zen-Origin-research/tools/perf"
+mkdir -p "$out"
+for t in zo-ui zo-stat; do swiftc -O -o "$out/$t" "$here/$t.swift"; done
+echo "built into $out"

@@ -1,0 +1,336 @@
+#!/usr/bin/python3
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Runs energy scenarios against browsers and saves raw data for scripts/perf/report.
+
+Usage: scripts/perf/run --batch NAME --browsers zen-official,firefox [--scenarios idle,scroll]
+                        [--runs 3] [--variant NAME] [--profiler] [--settle 45] [--keep]
+
+Runs are interleaved (run 1 of every scenario and browser, then run 2, ...) so slow drift on the
+machine spreads over all browsers. Each run starts the browser from a fresh copy of its template,
+waits for a quiet machine, settles, measures and quits. Raw data goes to
+../Zen-Origin-research/perf/runs/<batch>/<browser>[+variant]/<scenario>/r<n>/.
+Scenarios: see SCENARIOS below; `--scenarios all` runs every one.
+"""
+import argparse, json, os, shutil, sys, time, traceback
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import zo
+
+PARAGRAPH = (
+    "The octopus is a soft-bodied, eight-limbed mollusc of the order Octopoda. Around 300 species "
+    "are recognised, and the order is grouped within the class Cephalopoda with squids, cuttlefish "
+    "and nautiloids. Like other cephalopods, an octopus is bilaterally symmetric with two eyes and "
+    "a beaked mouth at the centre point of the eight limbs. The soft body can radically alter its "
+    "shape, enabling octopuses to squeeze through small gaps. They trail their eight appendages "
+    "behind them as they swim. The siphon is used both for respiration and for locomotion, by "
+    "expelling a jet of water."
+)
+
+
+class Run:
+    def __init__(self, args, browser, b, scenario, index, variants):
+        self.args, self.name, self.b, self.scenario, self.index = args, browser, b, scenario, index
+        self.variant = args.variant
+        label = browser + (f"+{self.variant}" if self.variant else "")
+        self.dir = os.path.join(zo.RUNS, args.batch, label, scenario, f"r{index}")
+        self.app = b["app"] if os.path.isabs(b["app"]) else os.path.join(zo.RESEARCH, b["app"])
+        self.meta = {"browser": browser, "variant": self.variant, "scenario": scenario, "run": index,
+                     "app": self.app, "windows": [], "notes": [], "profiler": args.profiler}
+        self.variants = variants
+        self.pid = None
+
+    # ---- profile -------------------------------------------------------------------------------
+    def prepare_profile(self, template_variant):
+        if self.b["engine"] != "gecko":
+            return None
+        src = os.path.join(zo.TEMPLATES, self.b["template"], template_variant)
+        if not os.path.isdir(src):
+            raise RuntimeError(f"no template {src}; run scripts/perf/make-profile {self.name} {template_variant}")
+        prof = os.path.join(self.dir, "profile")
+        zo.clone_tree(src, prof)
+        prefs, css = {}, ""
+        if self.variant:
+            v = self.variants[self.variant]
+            prefs.update(v.get("prefs", {}))
+            css = v.get("userchrome", "")
+        prefs.update(SCENARIOS[self.scenario].get("prefs", {}).get(self.b["ui"], {}))
+        if prefs:
+            zo.write_prefs(os.path.join(prof, "user.js"), prefs, f"run overrides: {self.variant or ''} {self.scenario}")
+        if css:
+            os.makedirs(os.path.join(prof, "chrome"), exist_ok=True)
+            open(os.path.join(prof, "chrome", "userChrome.css"), "w").write(css)
+        self.meta["prefs"], self.meta["userchrome"] = prefs, css
+        if template_variant != "base":
+            layout = os.path.join(zo.TEMPLATES, self.b["template"], f"{template_variant}.layout.json")
+            self.meta["layout"] = json.load(open(layout))
+        return prof
+
+    # ---- launch and quit -----------------------------------------------------------------------
+    def launch(self, extra_url=None, template_variant="base"):
+        prof = self.prepare_profile(template_variant)
+        env = {}
+        if self.args.profiler and self.b["engine"] == "gecko":
+            env = {"MOZ_PROFILER_STARTUP": "1", "MOZ_PROFILER_STARTUP_INTERVAL": "10",
+                   "MOZ_PROFILER_STARTUP_ENTRIES": "16777216",
+                   "MOZ_PROFILER_STARTUP_FEATURES": "power,markersallthreads,nostacksampling",
+                   "MOZ_PROFILER_STARTUP_FILTERS": "GeckoMain,Compositor,Renderer,RenderBackend",
+                   "MOZ_PROFILER_SHUTDOWN": os.path.join(self.dir, "profile.json")}
+        if self.b["engine"] == "gecko":
+            urls = []
+            args = ["-profile", prof] + ([extra_url] if extra_url else [])
+        else:
+            cfg = json.load(open(os.path.join(zo.HERE, "profiles.json")))["tabs"]
+            urls = [zo.url(s) for s in cfg["pinned"] + cfg["work"] + cfg["personal"]] + ([extra_url] if extra_url else [])
+            args = []
+        self.pid, self.t0 = zo.launch(self.app, args=args, env=env, urls=urls)
+        self.meta.update({"pid": self.pid, "launched_ms": self.t0})
+        open(os.path.join(zo.PERF, "current.pid"), "w").write(str(self.pid))
+        return self.pid
+
+    def quit(self):
+        if self.pid:
+            self.meta["quit"] = zo.quit_app(self.pid, timeout=60 if self.args.profiler else 30)
+            if os.path.exists(os.path.join(zo.PERF, "current.pid")):
+                os.remove(os.path.join(zo.PERF, "current.pid"))
+
+    # ---- steps ---------------------------------------------------------------------------------
+    def ready(self, place=True):
+        self.meta["first_window"] = zo.wait_window(self.pid)
+        if place:
+            self.meta["window"] = zo.place_window(self.pid)
+        zo.ui("front", self.pid)
+
+    def settle(self):
+        """Waits until `settle` seconds after launch, so startup work is over before measuring."""
+        left = self.t0 / 1000 + self.args.settle - time.time()
+        if left > 0:
+            time.sleep(left)
+        zo.ui("front", self.pid)
+
+    def park(self):
+        zo.ui("move", zo.PARK[0], zo.PARK[1], zo.PARK[0], zo.PARK[1], 50)
+
+    def measure(self, name, seconds, action=None):
+        w = zo.Window(self.pid, seconds, self.dir, name)
+        started = time.time()
+        if action:
+            action()
+        rest = seconds - (time.time() - started)
+        self.meta["windows"].append(dict(w.wait(), action_s=round(time.time() - started - max(rest, 0), 2)))
+        if rest < 0:
+            self.meta["notes"].append(f"{name}: action ran {-rest:.1f} s past the window")
+
+    def content_center(self):
+        x, y, w, h = zo.WINDOW
+        return x + w // 2 + 60, y + h // 2 + 40
+
+    # ---- scenario bodies -----------------------------------------------------------------------
+    def s_launch(self):
+        """Cold launch: app not running, file cache warm. Time to the first painted content pixel
+        of the selected tab (a solid magenta page), then 20 s of launch energy from coalition
+        counters, which start at zero when the app's coalition is created."""
+        power = zo.Window(None, 21, self.dir, "launch-power")  # system power only, from before open
+        self.launch(zo.url("launch"))
+        start = time.time()
+        cx, cy = self.content_center()
+        paint = zo.ui("waitpixel", cx, cy, "ff00ff", 12, 30000, "--since", int(self.t0), check=False)
+        self.meta["first_paint_ms"] = int(paint) if paint.isdigit() else None
+        self.meta["first_window"] = zo.wait_window(self.pid)
+        time.sleep(max(0, 20 - (time.time() - start)))
+        zo.stat_once(self.pid, os.path.join(self.dir, "launch.zostat.jsonl"))
+        self.meta["windows"].append({"name": "launch", "t0_ms": self.t0, "t1_ms": zo.now_ms(), "cumulative": True})
+        self.meta["windows"].append(power.wait())
+
+    def s_idle(self):
+        self.launch(); self.ready(); self.settle(); self.park()
+        self.measure("idle", 60)
+
+    def s_calibrate(self):
+        """Five minutes of idle from launch in 5 s steps, to choose the settle time."""
+        self.launch(); self.ready(); self.park()
+        w = zo.Window(self.pid, 300, self.dir, "calibrate", interval_ms=5000)
+        self.meta["windows"].append(w.wait())
+
+    def s_minimized(self):
+        self.launch(); self.ready(); self.settle()
+        zo.ui("minimize", self.pid)
+        time.sleep(5)
+        self.park()
+        self.measure("minimized", 60)
+
+    def s_switch(self):
+        self.launch(); self.ready(); self.settle(); self.park()
+        self.measure("tabs", 24, lambda: zo.ui("key", self.pid, "tab", "ctrl", 50, 400))
+        if self.b["ui"] == "zen":
+            def spaces():
+                for i in range(20):
+                    zo.ui("key", self.pid, "right" if i % 2 == 0 else "left", "cmd,opt")
+                    time.sleep(0.96)
+            self.measure("spaces", 22, spaces)
+
+    def s_sidebar(self):
+        """Zen compact mode: the pointer glides to the window's left edge and back 20 times.
+        Firefox: the same path over a vertical-tabs sidebar set to expand on hover. Safari has
+        no hover sidebar, so it toggles its sidebar with Cmd+Shift+L 40 times."""
+        self.launch(); self.ready(); self.settle()
+        x, y, w, h = zo.WINDOW
+        inside, edge, row = x + 700, x + 2, y + 400
+        if self.b["ui"] == "safari":
+            self.park()
+            self.measure("sidebar", 54, lambda: zo.ui("key", self.pid, "l", "cmd,shift", 40, 1300))
+            return
+        zo.ui("move", zo.PARK[0], zo.PARK[1], inside, row, 300)
+        time.sleep(2)
+        def glide():
+            for _ in range(20):
+                zo.ui("move", inside, row, edge, row, 300); time.sleep(1.0)
+                zo.ui("move", edge, row, inside, row, 300); time.sleep(1.0)
+        self.measure("sidebar", 54, glide)
+
+    def s_split(self):
+        if self.b["ui"] == "safari":
+            raise Skip("Safari has no split view")
+        self.launch(template_variant="split"); self.ready(); self.settle(); self.park()
+        d = self.meta["layout"]["divider"]
+        x, y = d["x"], d["y"]
+        def drags():
+            pos = x
+            for i in range(10):
+                to = x - 250 if i % 2 == 0 else x + 250
+                zo.ui("drag", self.pid, pos, y, to, y, 900)
+                pos = to
+                time.sleep(0.1)
+        self.measure("split", 22, drags)
+
+    def s_scroll(self):
+        self.launch(zo.url("longread")); self.ready(); self.settle()
+        cx, cy = self.content_center()
+        zo.ui("move", zo.PARK[0], zo.PARK[1], cx, cy, 200)
+        time.sleep(1)
+        self.measure("scroll", 46, lambda: zo.ui("scroll", self.pid, cx, cy, -40, 1750, 25))
+
+    def video(self, mode):
+        self.launch(zo.url("media", f"/?mode={mode}")); self.ready(); self.settle()
+        cx, cy = self.content_center()
+        zo.ui("click", self.pid, cx, cy)
+        zo.ui("waittitle", self.pid, "playing", 15000)
+        time.sleep(3 if mode == "fullscreen" else 1)
+        self.park()
+        self.measure(f"video-{mode}", 120)
+
+    def s_video_windowed(self):
+        self.video("windowed")
+
+    def s_video_fullscreen(self):
+        self.video("fullscreen")
+
+    def s_typing(self):
+        self.launch(zo.url("textarea")); self.ready(); self.settle()
+        cx, cy = self.content_center()
+        zo.ui("click", self.pid, cx, cy)
+        time.sleep(1)
+        self.measure("typing", 62, lambda: zo.ui("type", self.pid, PARAGRAPH, 10))
+
+    def s_bgtimer(self):
+        self.launch(zo.url("timer")); self.ready()
+        time.sleep(3)
+        zo.ui("key", self.pid, "tab", "ctrl,shift")  # back to the previous tab; the timer tab stays open behind it
+        self.settle(); self.park()
+        self.measure("bgtimer", 60)
+
+
+class Skip(Exception):
+    pass
+
+
+SCENARIOS = {
+    "launch": {"fn": Run.s_launch},
+    "idle": {"fn": Run.s_idle},
+    "minimized": {"fn": Run.s_minimized},
+    "switch": {"fn": Run.s_switch},
+    "sidebar": {"fn": Run.s_sidebar, "prefs": {
+        "zen": {"zen.view.compact.enable-at-startup": True},
+        "firefox": {"sidebar.verticalTabs": True, "sidebar.visibility": "expand-on-hover"}}},
+    "split": {"fn": Run.s_split},
+    "scroll": {"fn": Run.s_scroll},
+    "video-windowed": {"fn": Run.s_video_windowed},
+    "video-fullscreen": {"fn": Run.s_video_fullscreen},
+    "typing": {"fn": Run.s_typing},
+    "bgtimer": {"fn": Run.s_bgtimer},
+    "calibrate": {"fn": Run.s_calibrate},
+}
+ALL = ["launch", "idle", "minimized", "switch", "sidebar", "split", "scroll", "video-windowed",
+       "video-fullscreen", "typing", "bgtimer"]
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--batch", required=True)
+    p.add_argument("--browsers", required=True)
+    p.add_argument("--scenarios", default="all")
+    p.add_argument("--runs", type=int, default=3)
+    p.add_argument("--first-run", type=int, default=1)
+    p.add_argument("--variant")
+    p.add_argument("--profiler", action="store_true")
+    p.add_argument("--settle", type=float, default=45)
+    p.add_argument("--max-load", type=float, default=3.5)
+    p.add_argument("--keep", action="store_true", help="keep profile copies")
+    p.add_argument("--no-quiet", action="store_true", help="functional test: skip the quiet wait, mark runs noisy")
+    a = p.parse_args()
+    browsers = json.load(open(os.path.join(zo.HERE, "browsers.json")))
+    variants = json.load(open(os.path.join(zo.HERE, "variants.json")))
+    names = a.browsers.split(",")
+    scenarios = ALL if a.scenarios == "all" else a.scenarios.split(",")
+    for s in scenarios:
+        if s not in SCENARIOS:
+            sys.exit(f"unknown scenario {s}")
+    if a.variant and a.variant not in variants:
+        sys.exit(f"unknown variant {a.variant}")
+    batch_dir = os.path.join(zo.RUNS, a.batch)
+    os.makedirs(batch_dir, exist_ok=True)
+    json.dump({"argv": sys.argv, "started": time.strftime("%Y-%m-%d %H:%M:%S"),
+               "commit": zo.sh(["git", "-C", zo.ROOT, "rev-parse", "--short", "HEAD"], check=False)},
+              open(os.path.join(batch_dir, f"batch-{int(time.time())}.json"), "w"), indent=2)
+    for i in range(a.first_run, a.first_run + a.runs):
+        for s in scenarios:
+            for name in names:
+                b = browsers[name]
+                r = Run(a, name, b, s, i, variants)
+                if os.path.exists(os.path.join(r.dir, "meta.json")):
+                    zo.log("done already:", r.dir)
+                    continue
+                os.makedirs(r.dir, exist_ok=True)
+                for other in zo.app_pids(r.app):
+                    if b["engine"] == "gecko":
+                        raise SystemExit(f"{r.app} is already running (pid {other}); refusing to measure")
+                q = {"waited_s": 0, "load": zo.load1(), "noisy": True, "test": True} if a.no_quiet else zo.quiet_wait(max_load=a.max_load)
+                r.meta["quiet"] = q
+                zo.log(f"run {i} {s} {name}{'+' + a.variant if a.variant else ''} (quiet after {q['waited_s']} s, load {q['load']})")
+                try:
+                    SCENARIOS[s]["fn"](r)
+                    r.meta["ok"] = True
+                except Skip as e:
+                    r.meta.update(ok=False, skipped=str(e))
+                except Exception as e:
+                    r.meta.update(ok=False, error=f"{e}", trace=traceback.format_exc())
+                    zo.log("error:", e)
+                finally:
+                    try:
+                        r.quit()
+                    except Exception as e:
+                        r.meta["quit_error"] = str(e)
+                    if not a.keep and os.path.isdir(os.path.join(r.dir, "profile")):
+                        shutil.rmtree(os.path.join(r.dir, "profile"), ignore_errors=True)
+                    r.meta["finished"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                    if r.meta.get("ok") or r.meta.get("skipped"):
+                        json.dump(r.meta, open(os.path.join(r.dir, "meta.json"), "w"), indent=2)
+                    else:
+                        json.dump(r.meta, open(os.path.join(r.dir, "failed.json"), "w"), indent=2)
+                    time.sleep(5)
+    zo.log("batch done")
+
+
+if __name__ == "__main__":
+    main()

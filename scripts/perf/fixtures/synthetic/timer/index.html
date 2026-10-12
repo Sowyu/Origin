@@ -1,0 +1,24 @@
+<!--
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>timer 0</title>
+</head>
+<body>
+<span id="count">0</span>
+<script>
+var count = 0;
+var span = document.getElementById("count");
+setInterval(function () {
+  count++;
+  span.textContent = count;
+  document.title = "timer " + count;
+}, 1000);
+</script>
+</body>
+</html>

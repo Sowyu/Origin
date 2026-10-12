@@ -1,0 +1,39 @@
+{
+  "_comment": "Prefs the harness writes into every Gecko profile template. Each one removes a first-run prompt or makes runs repeatable; none should change steady-state energy. 'setup' prefs are only present while Marionette builds the template.",
+  "common": {
+    "browser.shell.checkDefaultBrowser": false,
+    "browser.startup.page": 3,
+    "browser.sessionstore.restore_on_demand": false,
+    "browser.warnOnQuit": false,
+    "browser.warnOnQuitShortcut": false,
+    "browser.tabs.warnOnClose": false,
+    "browser.aboutwelcome.enabled": false,
+    "browser.startup.homepage_override.mstone": "ignore",
+    "startup.homepage_welcome_url": "",
+    "startup.homepage_welcome_url.additional": "",
+    "startup.homepage_override_url": "",
+    "trailhead.firstrun.didSeeAboutWelcome": true,
+    "datareporting.policy.dataSubmissionPolicyBypassNotification": true,
+    "toolkit.legacyUserProfileCustomizations.stylesheets": true
+  },
+  "zen": {
+    "zen.welcome-screen.seen": true,
+    "zen.updates.show-update-notification": false
+  },
+  "firefox": {},
+  "setup": {
+    "marionette.port": 2828,
+    "remote.prefs.recommended": false
+  },
+  "tabs": {
+    "work": ["mdn", "stackoverflow", "pythondocs", "rustblog"],
+    "personal": ["wikipedia", "guardian", "bbc", "arstechnica"],
+    "pinned": ["github", "hackernews"]
+  },
+  "themes": {
+    "work": [{"c": [117, 143, 230], "isCustom": false, "algorithm": "analogous", "isPrimary": true, "lightness": 60, "position": {"x": 140, "y": 90}, "type": "explicit-lightness"},
+             {"c": [176, 120, 230], "isCustom": false, "algorithm": "analogous", "isPrimary": false, "lightness": 60, "position": {"x": 190, "y": 70}, "type": "explicit-lightness"}],
+    "personal": [{"c": [240, 150, 110], "isCustom": false, "algorithm": "analogous", "isPrimary": true, "lightness": 65, "position": {"x": 90, "y": 190}, "type": "explicit-lightness"},
+                 {"c": [235, 110, 150], "isCustom": false, "algorithm": "analogous", "isPrimary": false, "lightness": 65, "position": {"x": 60, "y": 150}, "type": "explicit-lightness"}]
+  }
+}

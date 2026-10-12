@@ -1,0 +1,145 @@
+#!/usr/bin/python3
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Builds Zen from this tree and records wall time, peak memory and disk use per phase.
+
+Usage: scripts/detach build scripts/build-zen [phase ...]
+Phases, in order: download import bootstrap locales build package (default: all of them).
+download is skipped when engine/ already holds a Firefox tree.
+Toolchains and options come from scripts/env.sh (release options, no LTO, no PGO).
+Stats go to ../Zen-Origin-research/logs/build-stats/<run>/: phases.tsv, mem.tsv, disk.tsv, summary.txt.
+"""
+import os, subprocess, sys, threading, time
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+RESEARCH = os.path.join(os.path.dirname(ROOT), "Zen-Origin-research")
+ENGINE = os.path.join(ROOT, "engine")
+ALL = ["download", "import", "bootstrap", "locales", "build", "package"]
+COMMANDS = {
+    "download": ["npm", "run", "download"],
+    "import": ["npm", "run", "import"],
+    # mach asks questions without a terminal unless told not to.
+    "bootstrap": ["./mach", "--no-interactive", "bootstrap", "--application-choice", "browser"],
+    "locales": ["python3", "scripts/update_en_US_packs.py"],
+    "build": ["npm", "run", "build"],
+    "package": ["npm", "run", "package"],
+}
+
+def env():
+    out = subprocess.run(["/bin/zsh", "-c", f". {ROOT}/scripts/env.sh && env -0"], capture_output=True, check=True).stdout
+    return dict(line.split("=", 1) for line in out.decode().split("\0") if "=" in line)
+
+def sh(*cmd):
+    return subprocess.run(cmd, capture_output=True, text=True).stdout
+
+def kb(path):
+    if not os.path.exists(path):
+        return 0
+    out = sh("du", "-sk", path).split()
+    return int(out[0]) if out else 0
+
+def free_gb():
+    return int(sh("df", "-k", "/System/Volumes/Data").splitlines()[1].split()[3]) // 1048576
+
+def objdir():
+    if not os.path.isdir(ENGINE):
+        return None
+    dirs = [d for d in os.listdir(ENGINE) if d.startswith("obj-")]
+    return os.path.join(ENGINE, dirs[0]) if dirs else None
+
+def system_memory():
+    """Used memory the way Activity Monitor counts it (app + wired + compressed), plus swap, in MB."""
+    page = int(sh("sysctl", "-n", "hw.pagesize"))
+    vm = {}
+    for line in sh("vm_stat").splitlines()[1:]:
+        if ":" in line:
+            k, v = line.split(":", 1)
+            vm[k.strip()] = int(v.strip().rstrip("."))
+    anon = vm.get("Anonymous pages", 0) - vm.get("Pages purgeable", 0)
+    used = (anon + vm.get("Pages wired down", 0) + vm.get("Pages occupied by compressor", 0)) * page
+    swap = sh("sysctl", "-n", "vm.swapusage")  # "total = 2048.00M  used = 1024.00M  free = ..."
+    swap_used = float(swap.split("used =")[1].split()[0].rstrip("M")) if "used =" in swap else 0.0
+    pressure = int(sh("sysctl", "-n", "kern.memorystatus_vm_pressure_level") or 0)
+    return used / 1048576, swap_used, pressure
+
+def tree_rss_mb(root):
+    kids, rss = {}, {}
+    for line in sh("ps", "-axo", "pid=,ppid=,rss=").splitlines():
+        pid, ppid, r = (int(x) for x in line.split())
+        kids.setdefault(ppid, []).append(pid)
+        rss[pid] = r
+    total, todo = 0, [root]
+    while todo:
+        p = todo.pop()
+        total += rss.get(p, 0)
+        todo += kids.get(p, [])
+    return total / 1024
+
+def watch(stop, path):
+    with open(path, "w") as f:
+        f.write("time\ttree_rss_mb\tsystem_used_mb\tswap_used_mb\tpressure\n")
+        while not stop.is_set():
+            used, swap, pressure = system_memory()
+            f.write(f"{int(time.time())}\t{tree_rss_mb(os.getpid()):.0f}\t{used:.0f}\t{swap:.0f}\t{pressure}\n")
+            f.flush()
+            stop.wait(5)
+
+def main():
+    phases = sys.argv[1:] or ALL
+    bad = [p for p in phases if p not in COMMANDS]
+    if bad:
+        sys.exit(f"unknown phase {bad}; phases: {' '.join(ALL)}")
+    run = time.strftime("%Y-%m-%d-%H%M%S")
+    stats = os.path.join(RESEARCH, "logs", "build-stats", run)
+    os.makedirs(stats)
+    e = env()
+    stop = threading.Event()
+    threading.Thread(target=watch, args=(stop, os.path.join(stats, "mem.tsv")), daemon=True).start()
+    disk = open(os.path.join(stats, "disk.tsv"), "w")
+    disk.write("when\tfree_gb\tengine_kb\tobjdir_kb\tmozbuild_kb\tcargo_rustup_kb\n")
+    def record_disk(when):
+        o = objdir()
+        disk.write(f"{when}\t{free_gb()}\t{kb(ENGINE)}\t{kb(o) if o else 0}\t{kb(os.path.expanduser('~/.mozbuild'))}\t"
+                   f"{kb(os.path.expanduser('~/.cargo')) + kb(os.path.expanduser('~/.rustup'))}\n")
+        disk.flush()
+    record_disk("start")
+    tsv = open(os.path.join(stats, "phases.tsv"), "w")
+    tsv.write("phase\tstart\tend\tseconds\texit\n")
+    status = 0
+    for phase in phases:
+        if free_gb() < 45:
+            print(f"stopping before {phase}: under 45 GB free", flush=True)
+            status = 1
+            break
+        if phase == "download" and os.path.exists(os.path.join(ENGINE, "toolkit", "moz.build")):
+            print("=== download: engine/ already holds Firefox, skipped", flush=True)
+            continue
+        cwd = ENGINE if phase == "bootstrap" else ROOT
+        print(f"=== {phase}: {' '.join(COMMANDS[phase])} (cwd {cwd})", flush=True)
+        start = time.time()
+        rc = subprocess.call(COMMANDS[phase], cwd=cwd, env=e)
+        end = time.time()
+        tsv.write(f"{phase}\t{int(start)}\t{int(end)}\t{end - start:.0f}\t{rc}\n")
+        tsv.flush()
+        record_disk(f"after-{phase}")
+        print(f"=== {phase} exit {rc} after {end - start:.0f} s", flush=True)
+        if rc != 0:
+            status = rc
+            break
+    stop.set()
+    time.sleep(0.2)
+    rows = [l.split("\t") for l in open(os.path.join(stats, "mem.tsv")).read().splitlines()[1:]]
+    with open(os.path.join(stats, "summary.txt"), "w") as f:
+        if rows:
+            f.write(f"peak build tree RSS {max(int(r[1]) for r in rows)} MB\n")
+            f.write(f"peak system used {max(int(r[2]) for r in rows)} MB of 16384\n")
+            f.write(f"peak swap used {max(int(r[3]) for r in rows)} MB\n")
+            f.write(f"worst memory pressure level {max(int(r[4]) for r in rows)} (1 normal, 2 warn, 4 critical)\n")
+        f.write(open(os.path.join(stats, "phases.tsv")).read())
+        f.write(open(os.path.join(stats, "disk.tsv")).read())
+    print(open(os.path.join(stats, "summary.txt")).read(), flush=True)
+    sys.exit(status)
+
+if __name__ == "__main__":
+    main()

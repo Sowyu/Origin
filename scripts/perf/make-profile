@@ -1,0 +1,152 @@
+#!/usr/bin/python3
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Builds a Gecko profile template for the energy harness through Marionette.
+
+Usage: scripts/perf/make-profile <browser> [base|split] [--warmup 180]
+
+The template holds 10 loaded tabs: for Zen, 4 in a "Work" space and 4 in a "Personal" space,
+each space with its own two-colour gradient, plus 2 Essentials; for Firefox, the same 8 tabs and
+2 pinned tabs. The split variant also has the first two Work tabs in a split view, and records
+where its divider sits on screen. The browser then idles for --warmup seconds so first-run
+downloads (Remote Settings, Safe Browsing lists, media plugins) finish, and quits cleanly so the
+session is saved. Marionette runs only here, never while measuring.
+Output: ../Zen-Origin-research/perf/templates/<template>/<variant>/ with layout.json beside it.
+"""
+import argparse, json, os, shutil, sys, time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import zo
+
+ZEN_SETUP = """
+const [urls, themes, split] = arguments;
+await gZenWorkspaces.promiseInitialized;
+const sys = Services.scriptSecurityManager.getSystemPrincipal();
+const add = u => gBrowser.addTab(u, { triggeringPrincipal: sys, skipAnimation: true });
+const theme = colors => ({ type: "gradient", gradientColors: colors, opacity: 0.5, texture: 0 });
+let work = gZenWorkspaces.getWorkspaces()[0];
+work.name = "Work";
+work.theme = theme(themes.work);
+gZenWorkspaces.saveWorkspace(work);
+let personal = await gZenWorkspaces.createAndSaveWorkspace("Personal", undefined, true);
+personal.theme = theme(themes.personal);
+gZenWorkspaces.saveWorkspace(personal);
+const workTabs = urls.work.map(add);
+gZenWorkspaces.moveTabsToWorkspace(workTabs, work.uuid);
+const personalTabs = urls.personal.map(add);
+gZenWorkspaces.moveTabsToWorkspace(personalTabs, personal.uuid);
+for (const u of urls.pinned) gZenPinnedTabManager.addToEssentials(add(u));
+const keep = new Set([...workTabs, ...personalTabs]);
+for (const t of [...gBrowser.tabs]) {
+  if (!keep.has(t) && !t.hasAttribute("zen-essential") && !t.hasAttribute("zen-empty-tab")) gBrowser.removeTab(t);
+}
+await gZenWorkspaces.changeWorkspace(gZenWorkspaces.getWorkspaces().find(w => w.uuid == work.uuid));
+// Changing to the space that is already active does not repaint its theme.
+gZenThemePicker.onWorkspaceChange(gZenWorkspaces.getActiveWorkspace());
+gBrowser.selectedTab = workTabs[0];
+const all = gZenWorkspaces.allStoredTabs ?? gBrowser.tabs;
+if (split) gZenViewSplitter.splitTabs([workTabs[0], workTabs[1]], "vsep");
+return { spaces: gZenWorkspaces.getWorkspaces().map(w => ({ name: w.name, colors: w.theme?.gradientColors?.length })),
+         tabs: gBrowser.tabs.length, all: all.length, workTabs: workTabs.length, personalTabs: personalTabs.length,
+         background: getComputedStyle(gZenThemePicker.browserBackgroundElement).getPropertyValue("--zen-main-browser-background") };
+"""
+
+FIREFOX_SETUP = """
+const [urls, themes, split] = arguments;
+const sys = Services.scriptSecurityManager.getSystemPrincipal();
+const add = u => gBrowser.addTab(u, { triggeringPrincipal: sys, skipAnimation: true });
+for (const u of urls.pinned) gBrowser.pinTab(add(u));
+const tabs = [...urls.work, ...urls.personal].map(add);
+const keep = new Set(tabs);
+for (const t of [...gBrowser.tabs]) if (!t.pinned && !keep.has(t)) gBrowser.removeTab(t);
+gBrowser.selectedTab = tabs[0];
+if (split) gBrowser.addTabSplitView([tabs[0], tabs[1]]);
+return { tabs: gBrowser.tabs.length };
+"""
+
+LOADED = "return [...gBrowser.tabs].every(t => !t.hasAttribute('busy') && !t.hasAttribute('pending'));"
+
+# Screen point of the split divider's centre, for the drag scenario.
+DIVIDER = """
+const el = document.querySelector('.zen-split-view-splitter[orient="vertical"], .zen-split-view-splitter')
+  || gBrowser.tabpanels.splitViewSplitter || document.querySelector('.split-view-splitter');
+if (!el) return null;
+const r = el.getBoundingClientRect();
+return { x: Math.round(window.mozInnerScreenX + r.left + r.width / 2),
+         y: Math.round(window.mozInnerScreenY + r.top + r.height / 2),
+         content_left: Math.round(window.mozInnerScreenX + gBrowser.tabpanels.getBoundingClientRect().left),
+         content_right: Math.round(window.mozInnerScreenX + gBrowser.tabpanels.getBoundingClientRect().right) };
+"""
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("browser")
+    p.add_argument("variant", nargs="?", default="base", choices=["base", "split"])
+    p.add_argument("--warmup", type=int, default=180)
+    a = p.parse_args()
+    browsers = json.load(open(os.path.join(zo.HERE, "browsers.json")))
+    cfg = json.load(open(os.path.join(zo.HERE, "profiles.json")))
+    b = browsers[a.browser]
+    if b["engine"] != "gecko":
+        sys.exit("only Gecko browsers use profile templates")
+    app = os.path.join(zo.RESEARCH, b["app"])
+    if zo.app_pids(app):
+        sys.exit(f"{app} is already running; quit it first")
+    out = os.path.join(zo.TEMPLATES, b["template"], a.variant)
+    work = out + ".building"
+    shutil.rmtree(work, ignore_errors=True)
+    os.makedirs(work)
+    prefs = dict(cfg["common"], **cfg[b["ui"]])
+    zo.write_prefs(os.path.join(work, "user.js"), prefs, "harness prefs (scripts/perf/profiles.json)")
+    zo.write_prefs(os.path.join(work, "user.js"), cfg["setup"], "SETUP ONLY")
+    x, y, w, h = zo.WINDOW
+    json.dump({"chrome://browser/content/browser.xhtml": {"main-window": {
+        "screenX": str(x), "screenY": str(y), "width": str(w), "height": str(h), "sizemode": "normal"}}},
+        open(os.path.join(work, "xulstore.json"), "w"))
+    urls = {k: [zo.url(s) for s in v] for k, v in cfg["tabs"].items()}
+
+    zo.log("launching", a.browser, "with Marionette")
+    pid, _ = zo.launch(app, args=["-profile", work, "--marionette", "-remote-allow-system-access"])
+    m = None
+    try:
+        zo.wait_window(pid)
+        time.sleep(3)
+        m = zo.Marionette()
+        setup = ZEN_SETUP if b["ui"] == "zen" else FIREFOX_SETUP
+        zo.log("setup:", m.js(setup, urls, cfg["themes"], a.variant == "split"))
+        zo.place_window(pid)
+        end = time.time() + 120
+        while not m.js(LOADED) and time.time() < end:
+            time.sleep(1)
+        zo.log("tabs loaded; warming up for", a.warmup, "s")
+        time.sleep(a.warmup)
+        layout = {"window": zo.WINDOW, "browser": a.browser, "variant": a.variant,
+                  "made": time.strftime("%Y-%m-%d %H:%M:%S")}
+        if a.variant == "split":
+            layout["divider"] = m.js(DIVIDER)
+            zo.log("divider", layout["divider"])
+        m.quit()
+        if not zo.wait_exit(pid, 60):
+            raise RuntimeError("browser did not quit")
+    except Exception:
+        if m:
+            m.quit()
+        zo.quit_app(pid)
+        raise
+    # Drop the setup prefs so measured runs never see Marionette.
+    text = open(os.path.join(work, "user.js")).read()
+    open(os.path.join(work, "user.js"), "w").write(text.split("\n// SETUP ONLY")[0] + "\n")
+    # Firefox copies user.js prefs into prefs.js at shutdown; drop the setup ones there too.
+    prefs_js = os.path.join(work, "prefs.js")
+    kept = [l for l in open(prefs_js) if not any(f'"{k}"' in l for k in cfg["setup"])]
+    open(prefs_js, "w").writelines(kept)
+    shutil.rmtree(out, ignore_errors=True)
+    os.rename(work, out)
+    json.dump(layout, open(os.path.join(out, "..", f"{a.variant}.layout.json"), "w"), indent=2)
+    zo.log("template ready:", out)
+
+
+if __name__ == "__main__":
+    main()

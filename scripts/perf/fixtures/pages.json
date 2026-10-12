@@ -1,0 +1,13 @@
+[
+  {"name": "mdn", "group": "work", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map"},
+  {"name": "github", "group": "work", "url": "https://github.com/mozilla-firefox/firefox"},
+  {"name": "stackoverflow", "group": "work", "url": "https://stackoverflow.com/questions/231767/what-does-the-yield-keyword-do-in-python", "archive": true},
+  {"name": "pythondocs", "group": "work", "url": "https://docs.python.org/3/library/functions.html"},
+  {"name": "rustblog", "group": "work", "url": "https://blog.rust-lang.org/2026/10/01/Rust-1.99.0/"},
+  {"name": "wikipedia", "group": "personal", "url": "https://en.wikipedia.org/wiki/Octopus"},
+  {"name": "guardian", "group": "personal", "url": "https://www.theguardian.com/money/2026/oct/12/father-dna-test-passport-daughter-dual-national"},
+  {"name": "bbc", "group": "personal", "url": "https://www.bbc.com/news/articles/c64g1l5389kvo"},
+  {"name": "hackernews", "group": "personal", "url": "https://news.ycombinator.com/"},
+  {"name": "arstechnica", "group": "personal", "url": "https://arstechnica.com/ai/2026/10/ai-coding-agents-generate-more-code-but-not-more-software/"},
+  {"name": "longread", "group": "long", "url": "https://en.wikipedia.org/wiki/United_States"}
+]

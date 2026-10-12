@@ -1,0 +1,126 @@
+#!/usr/bin/python3
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Serves the frozen fixtures: http://<site>.localhost:8765/ maps to <fixtures>/sites/<site>/.
+
+Each page gets its own host, so Gecko gives every site its own content process like real
+browsing. *.localhost resolves to 127.0.0.1 and ::1, so the server listens on both, and only there. Byte ranges
+are supported because Safari refuses to play video from a server without them.
+
+Usage: scripts/perf/serve [--port 8765] [--root ../Zen-Origin-research/fixtures/sites]
+"""
+import argparse, http.server, mimetypes, os, re, socket, socketserver, sys, threading
+
+ROOT_DEFAULT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                            os.pardir, "Zen-Origin-research", "fixtures", "sites")
+mimetypes.add_type("video/mp4", ".mp4")
+mimetypes.add_type("font/woff2", ".woff2")
+mimetypes.add_type("image/svg+xml", ".svg")
+mimetypes.add_type("image/webp", ".webp")
+mimetypes.add_type("image/avif", ".avif")
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    root = ROOT_DEFAULT
+
+    def log_message(self, *args):
+        pass
+
+    def resolve(self):
+        host = (self.headers.get("Host") or "").split(":")[0].lower()
+        site = host[: -len(".localhost")] if host.endswith(".localhost") else ""
+        if not re.fullmatch(r"[a-z0-9]+", site):
+            return None
+        path = self.path.split("?", 1)[0].split("#", 1)[0]
+        full = os.path.realpath(os.path.join(self.root, site, path.lstrip("/")))
+        base = os.path.realpath(os.path.join(self.root, site))
+        if not (full == base or full.startswith(base + os.sep)):
+            return None
+        if os.path.isdir(full):
+            full = os.path.join(full, "index.html")
+        return full if os.path.isfile(full) else None
+
+    def do_HEAD(self):
+        self.serve(body=False)
+
+    def do_GET(self):
+        self.serve(body=True)
+
+    def serve(self, body):
+        path = self.resolve()
+        if not path:
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        size = os.path.getsize(path)
+        start, end, status = 0, size - 1, 200
+        m = re.fullmatch(r"bytes=(\d*)-(\d*)", self.headers.get("Range") or "")
+        if m and size:
+            if m.group(1):
+                start = int(m.group(1))
+                end = min(int(m.group(2)), size - 1) if m.group(2) else size - 1
+            else:
+                start = max(0, size - int(m.group(2)))
+            if start > end:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            status = 206
+        self.send_response(status)
+        ctype = mimetypes.guess_type(path)[0] or "application/octet-stream"
+        if ctype.startswith("text/") or ctype in ("application/javascript", "image/svg+xml"):
+            ctype += "; charset=utf-8"
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(end - start + 1))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Cache-Control", "max-age=3600")
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.end_headers()
+        if not body:
+            return
+        with open(path, "rb") as f:
+            f.seek(start)
+            left = end - start + 1
+            try:
+                while left > 0:
+                    chunk = f.read(min(left, 1 << 20))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+
+class Server4(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+
+class Server6(Server4):
+    address_family = socket.AF_INET6
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--root", default=ROOT_DEFAULT)
+    a = p.parse_args()
+    Handler.root = os.path.realpath(a.root)
+    if not os.path.isdir(Handler.root):
+        sys.exit(f"no fixtures at {Handler.root}; run scripts/perf/make-fixtures")
+    # Loopback only: this Mac has a public address.
+    v4, v6 = Server4(("127.0.0.1", a.port), Handler), Server6(("::1", a.port), Handler)
+    threading.Thread(target=v6.serve_forever, daemon=True).start()
+    print(f"serving {Handler.root} on http://<site>.localhost:{a.port}/", flush=True)
+    v4.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

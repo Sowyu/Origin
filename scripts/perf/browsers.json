@@ -1,0 +1,29 @@
+{
+  "zen-official": {
+    "app": "builds/zen-1.23.2b-official/Zen.app",
+    "engine": "gecko",
+    "ui": "zen",
+    "template": "zen-1.23.2b",
+    "note": "Official Zen 1.23.2b DMG (thin LTO and PGO, cross-compiled by Zen's CI), app update disabled by policy"
+  },
+  "zen-stock": {
+    "app": "builds/zen-1.23.2b-stock/Zen.app",
+    "engine": "gecko",
+    "ui": "zen",
+    "template": "zen-1.23.2b",
+    "note": "Zen 1.23.2b built here without changes, release options without LTO and PGO"
+  },
+  "firefox": {
+    "app": "builds/firefox-157.0.1/Firefox.app",
+    "engine": "gecko",
+    "ui": "firefox",
+    "template": "firefox-157.0.1",
+    "note": "Official Firefox 157.0.1 en-US DMG, app update disabled by policy"
+  },
+  "safari": {
+    "app": "/Applications/Safari.app",
+    "engine": "webkit",
+    "ui": "safari",
+    "note": "Safari 27.0.1 as installed"
+  }
+}
