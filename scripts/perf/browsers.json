@@ -33,6 +33,13 @@
     "template": "zen-1.23.2b",
     "note": "zen-stock signed with the Apple Development identity and Firefox's hardened runtime entitlements (scripts/sign-app); for the DRM check"
   },
+  "origin": {
+    "app": "builds/origin-1.23.2b/Origin.app",
+    "engine": "gecko",
+    "ui": "zen",
+    "template": "origin-1.23.2b",
+    "note": "Origin built here from main: Zen 1.23.2b with the cuts in docs/cuts.md and Origin's prefs, release options without LTO and PGO like zen-stock"
+  },
   "none": {
     "app": "",
     "engine": "none",

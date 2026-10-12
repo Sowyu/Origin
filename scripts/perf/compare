@@ -1,0 +1,156 @@
+#!/usr/bin/python3
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Puts browsers side by side from report .json files and compares the first one with a reference.
+
+Usage: scripts/perf/compare <report.json> [...] --browsers origin,zen-official,firefox [--vs zen-official]
+                            [--out docs/perf/<name>]
+       scripts/perf/compare --self-test
+
+Tables: whole-Mac power (sys_combined_mw), the browser's own power plus WindowServer
+(app_mw + ws_mw), and memory at idle (footprint_mb). The launch row shows first paint and launch
+energy. The change column is the first browser against --vs, in percent. It reads "within noise"
+when the min to max ranges of the two browsers overlap. A browser that appears in several files
+takes its rows from the last file that has them.
+"""
+import argparse, json, os, sys
+
+# (scenario, window, label) in the harness order.
+ROWS = [("launch", "launch", "launch"), ("idle", "idle", "idle"), ("minimized", "minimized", "minimized"),
+        ("switch", "tabs", "switch tabs"), ("switch", "spaces", "switch spaces"), ("sidebar", "sidebar", "sidebar"),
+        ("split", "split", "split"), ("scroll", "scroll", "scroll"),
+        ("video-windowed", "video-windowed", "video-windowed"),
+        ("video-fullscreen", "video-fullscreen", "video-fullscreen"), ("typing", "typing", "typing"),
+        ("bgtimer", "bgtimer", "bgtimer")]
+
+
+def pct(cell, ref):
+    """Signed percent change of cell against ref, or "within noise" when their ranges overlap."""
+    if not cell or not ref:
+        return "n/a"
+    if cell["min"] <= ref["max"] and ref["min"] <= cell["max"]:
+        return "within noise"
+    if not ref["median"]:
+        return "n/a"
+    return f"{(cell['median'] - ref['median']) / ref['median'] * 100:+.0f}%"
+
+
+def add(a, b):
+    """Sum of two metric cells (median, min and max each)."""
+    if not a or not b:
+        return None
+    return {k: a[k] + b[k] for k in ("median", "min", "max")}
+
+
+def num(cell, digits=0):
+    return "n/a" if not cell else f"{cell['median']:.{digits}f}"
+
+
+def build(rows, browsers, vs):
+    """rows: report rows. Returns the table dicts, shown values and change per scenario."""
+    idx = {(r["browser"], r["scenario"], r["window"]): r for r in rows}
+    tables = []
+    specs = [("Whole-Mac power (mW)", lambda r: r.get("sys_combined_mw"), 0, True),
+             ("Browser power plus WindowServer (mW)", lambda r: add(r.get("app_mw"), r.get("ws_mw")), 0, False),
+             ("Memory at idle (MB)", lambda r: r.get("footprint_mb"), 0, False)]
+    for ti, (title, get, digits, launch_special) in enumerate(specs):
+        out = []
+        for scen, win, label in ROWS:
+            if ti == 2 and label != "idle":
+                continue
+            cells, cmp_ = {}, {}
+            for b in browsers:
+                r = idx.get((b, scen, win))
+                if r is None:
+                    cells[b], cmp_[b] = "n/a", None
+                elif label == "launch":
+                    fp, j = r.get("first_paint_ms"), r.get("app_energy_j")
+                    cells[b] = f"{num(fp)} ms / {num(j, 1)} J" if fp else "n/a"
+                    cmp_[b] = fp
+                else:
+                    cells[b], cmp_[b] = num(get(r), digits), get(r)
+            change = pct(cmp_[browsers[0]], cmp_.get(vs)) if vs in cmp_ and vs != browsers[0] else "n/a"
+            out.append({"scenario": label, "cells": cells, "change": change})
+        tables.append({"title": title, "rows": out})
+    return tables
+
+
+def runs_note(rows, browsers):
+    parts = []
+    for b in browsers:
+        n = [r["runs"] for r in rows if r["browser"] == b]
+        if n:
+            parts.append(f"{b} {min(n)}" + (f" to {max(n)}" if max(n) != min(n) else ""))
+    return ", ".join(parts)
+
+
+def markdown(tables, browsers, vs, source_note, runs):
+    md = ["# Comparison", ""]
+    for t in tables:
+        md += [f"## {t['title']}", "",
+               "| scenario | " + " | ".join(browsers) + f" | {browsers[0]} vs {vs} |",
+               "|---" * (len(browsers) + 2) + "|"]
+        for r in t["rows"]:
+            md.append(f"| {r['scenario']} | " + " | ".join(r["cells"][b] for b in browsers) + f" | {r['change']} |")
+        md += ["", f"Batches: {source_note}. Runs per scenario: {runs}. Medians; change is first paint for launch, "
+               "and \"within noise\" when the min to max ranges overlap.", ""]
+    return "\n".join(md)
+
+
+def load(path):
+    rows = json.load(open(path))
+    md = os.path.splitext(path)[0] + ".md"
+    name = os.path.basename(path)
+    if os.path.exists(md):
+        first = open(md).readline()
+        if first.startswith("# "):
+            name = first[2:].strip()
+    return rows, name
+
+
+def self_test():
+    a, b = {"median": 10, "min": 9, "max": 11}, {"median": 20, "min": 18, "max": 22}
+    assert pct(a, b) == "-50%", pct(a, b)
+    assert pct(b, a) == "+100%"
+    assert pct({"median": 10, "min": 8, "max": 19}, b) == "within noise"
+    assert pct(None, b) == "n/a"
+    rows = [{"browser": x, "scenario": "idle", "window": "idle", "runs": 3, "sys_combined_mw": c,
+             "app_mw": c, "ws_mw": c, "footprint_mb": c} for x, c in (("a", a), ("b", b))]
+    t = build(rows, ["a", "b", "safari"], "b")
+    idle = [r for r in t[0]["rows"] if r["scenario"] == "idle"][0]
+    assert idle["cells"] == {"a": "10", "b": "20", "safari": "n/a"} and idle["change"] == "-50%", idle
+    print("ok")
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("reports", nargs="*")
+    p.add_argument("--browsers", help="comma list, column order; the first is compared with --vs")
+    p.add_argument("--vs", default="zen-official")
+    p.add_argument("--out", help="path prefix for .json and .md")
+    p.add_argument("--self-test", action="store_true")
+    a = p.parse_args()
+    if a.self_test:
+        return self_test()
+    if not a.reports or not a.browsers:
+        p.error("need report files and --browsers")
+    browsers = a.browsers.split(",")
+    rows, names = [], []
+    for path in a.reports:
+        r, n = load(path)
+        rows += r
+        names.append(n)
+    # Later files override earlier ones for the same browser, scenario and window.
+    rows = list({(r["browser"], r["scenario"], r["window"]): r for r in rows}.values())
+    tables = build(rows, browsers, a.vs)
+    text = markdown(tables, browsers, a.vs, " + ".join(names), runs_note(rows, browsers))
+    if a.out:
+        json.dump({"browsers": browsers, "vs": a.vs, "batches": names, "tables": tables},
+                  open(a.out + ".json", "w"), indent=1)
+        open(a.out + ".md", "w").write(text)
+    print(text)
+
+
+if __name__ == "__main__":
+    main()

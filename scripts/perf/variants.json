@@ -74,5 +74,10 @@
     "prefs": {"browser.sessionstore.restore_on_demand": true, "browser.sessionstore.restore_pinned_tabs_on_demand": true,
               "dom.ipc.processPrelaunch.enabled": false, "browser.newtab.preload": false},
     "scenarios": []
+  },
+  "unload-1min": {
+    "what": "Origin's tab unloader at 1 minute: the idle scenario settles 150 s, so it measures memory after background tabs unload",
+    "prefs": {"origin.tabs.unload-after-minutes": 1},
+    "scenarios": []
   }
 }

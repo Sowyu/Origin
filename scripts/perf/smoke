@@ -1,0 +1,96 @@
+#!/usr/bin/python3
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Smoke test for a Gecko build. Opens it on a throwaway copy of a profile template through
+Marionette, waits for the tabs, then saves the script errors in the browser console, which of
+Zen's kept and cut globals exist, the spaces, Essentials and tab counts, the app name and profile
+path, and a screenshot. Opening zen-stock's template (the default) in Origin also checks the
+spec's rule that a copied Zen profile opens with its spaces, Essentials and pinned tabs intact.
+
+Usage: scripts/perf/hold scripts/perf/smoke <browser> [--template zen-1.23.2b] [--wait 20]
+Output: ../Zen-Origin-research/perf.noindex/smoke/<browser>/smoke.json and smoke.png.
+Exits 1 when a kept global is missing, a cut one is present, a count is off or an error is logged.
+"""
+import argparse, json, os, shutil, sys, time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import zo
+
+KEPT = ["gZenWorkspaces", "gZenUIManager", "gZenVerticalTabsManager", "gZenCompactMode", "gZenViewSplitter",
+        "gZenFolders", "gZenPinnedTabManager", "gZenThemePicker", "gZenKeyboardShortcutsManager", "gZenEmojiPicker"]
+CUT = ["gZenGlanceManager", "gZenBoostsManager", "gZenLibrary", "gZenMods", "gZenMediaController",
+       "gZenLiveFoldersUI", "gZenShareManager", "gZenSpaceRoutingManager", "gZenMarketplaceManager"]
+
+LOADED = "return [...gBrowser.tabs].every(t => !t.hasAttribute('busy') && !t.hasAttribute('pending'));"
+
+PROBE = """
+const [kept, cut] = arguments;
+const errors = Services.console.getMessageArray()
+  .filter(m => m instanceof Ci.nsIScriptError && !(m.flags & Ci.nsIScriptError.warningFlag))
+  .map(m => `${m.errorMessage} (${m.sourceName}:${m.lineNumber})`);
+const has = names => Object.fromEntries(names.map(n => [n, typeof window[n] !== "undefined"]));
+let spaces = null, tabs = null, essentials = null;
+try {
+  await gZenWorkspaces.promiseInitialized;
+  spaces = gZenWorkspaces.getWorkspaces().map(w => w.name);
+  const all = gZenWorkspaces.allStoredTabs;
+  tabs = all.length;
+  essentials = all.filter(t => t.hasAttribute("zen-essential")).length;
+} catch (e) {
+  errors.push("probe: " + e);
+}
+return { app: Services.appinfo.name, version: Services.appinfo.version,
+         profile: Services.dirsvc.get("ProfD", Ci.nsIFile).path,
+         kept: has(kept), cut: has(cut), spaces, tabs, essentials, title: document.title, errors };
+"""
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("browser")
+    p.add_argument("--template", default="zen-1.23.2b", help="template folder under perf.noindex/templates")
+    p.add_argument("--wait", type=int, default=20, help="seconds to wait after the tabs load")
+    a = p.parse_args()
+    b = json.load(open(os.path.join(zo.HERE, "browsers.json")))[a.browser]
+    cfg = json.load(open(os.path.join(zo.HERE, "profiles.json")))
+    app = os.path.join(zo.RESEARCH, b["app"])
+    if zo.app_pids(app):
+        sys.exit(f"{app} is already running; quit it first")
+    out = os.path.join(zo.PERF, "smoke", a.browser)
+    prof = os.path.join(out, "profile")
+    shutil.rmtree(out, ignore_errors=True)
+    zo.clone_tree(os.path.join(zo.TEMPLATES, a.template, "base"), prof)
+    zo.write_prefs(os.path.join(prof, "user.js"), dict(cfg["common"], **cfg[b["ui"]], **cfg["setup"]), "smoke test")
+    pid, _ = zo.launch(app, args=["-profile", prof, "--marionette", "-remote-allow-system-access"])
+    m, result = None, {}
+    try:
+        zo.wait_window(pid)
+        zo.place_window(pid)
+        m = zo.Marionette()
+        end = time.time() + 120
+        while not m.js(LOADED) and time.time() < end:
+            time.sleep(1)
+        time.sleep(a.wait)
+        result = m.js(PROBE, KEPT, CUT)
+        zo.sh(["screencapture", "-x", "-R" + ",".join(map(str, zo.WINDOW)), os.path.join(out, "smoke.png")], check=False)
+        m.quit()
+        zo.wait_exit(pid, 60)
+    finally:
+        zo.quit_app(pid)
+    shutil.rmtree(prof, ignore_errors=True)
+    problems = [f"missing {k}" for k, v in result.get("kept", {}).items() if not v]
+    problems += [f"still there: {k}" for k, v in result.get("cut", {}).items() if v]
+    if result.get("tabs") != 10 or result.get("essentials") != 2 or len(result.get("spaces") or []) != 2:
+        problems.append(f"expected 2 spaces, 10 tabs, 2 Essentials; got {result.get('spaces')}, "
+                        f"{result.get('tabs')}, {result.get('essentials')}")
+    problems += [f"error: {e}" for e in result.get("errors", [])]
+    result["problems"] = problems
+    json.dump(result, open(os.path.join(out, "smoke.json"), "w"), indent=2)
+    print(json.dumps({k: result.get(k) for k in ("app", "version", "profile", "spaces", "tabs", "essentials")}))
+    print("\n".join(problems) or "no problems")
+    sys.exit(1 if problems else 0)
+
+
+if __name__ == "__main__":
+    main()

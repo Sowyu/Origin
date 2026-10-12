@@ -3,16 +3,19 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# The baseline measurements in one unattended chain, most important first:
+# The measurements in one unattended chain, most important first:
 # 1. baseline-1: every scenario, 3 runs, official Zen, stock Zen, Firefox, Safari and a
 #    no-browser floor.
-# 2. effects-1: each Zen effect turned off on its own in stock Zen, plus all of them at once
-#    (min-visual), per scenario with stock Zen as an interleaved control. Idle is left out
-#    because baseline-1 puts Zen at the no-browser floor there (app 0 mW, WindowServer within
-#    1 mW), which bounds what any effect costs at idle. Launch is left out because its only
-#    effect, the loading bar, is on the cut list.
-# 3. memory-1: idle with only the selected tab loaded, with and without spare processes.
-# 4. profiler-1: RefreshDriverTick markers at idle and minimized.
+# 2. origin-1: Origin on every scenario, interleaved with Origin with every Zen effect off
+#    (min-visual) where effects can cost something, plus the no-browser floor again for drift.
+# 3. memory-1: idle with only the selected tab loaded (on-demand), with and without spare
+#    processes (lean-memory; Origin has those prefs built in), and Origin's tab unloader set to
+#    one minute (unload-1min).
+# 4. profiler-1: RefreshDriverTick markers at idle and minimized, Origin included.
+# 5. effects-1: each Zen effect turned off on its own in stock Zen, plus all of them at once,
+#    per scenario with stock Zen as an interleaved control. Idle is left out because baseline-1
+#    puts Zen at the no-browser floor there (app 0 mW, WindowServer within 1 mW), which bounds
+#    what any effect costs at idle. Launch is left out because its only effect is cut.
 # Settle is 150 s: calibration (batch calib-1) found one-off startup bursts of 250-560 mW with
 # 4-6 MB of writes up to 124 s after launch. Every step resumes where it stopped, so rerunning
 # the chain after a crash only measures what is missing. scripts/perf/hold pauses it between
@@ -22,9 +25,17 @@ set -u
 here="$(cd "$(dirname "$0")" && pwd)"
 BROWSERS="${BROWSERS:-zen-official,zen-stock,firefox}"
 SETTLE="${SETTLE:-150}"
+ACTIVE="switch,scroll,video-windowed,sidebar,split"
 run() { "$here/run" --settle "$SETTLE" "$@" || echo "step failed: $*"; }
 
 run --batch baseline-1 --browsers "none,$BROWSERS,safari" --scenarios all --runs 3
+
+run --batch origin-1 --browsers origin,origin+min-visual --scenarios "$ACTIVE" --runs 3
+run --batch origin-1 --browsers none,origin --scenarios all --runs 3
+
+run --batch memory-1 --browsers firefox+on-demand,firefox+lean-memory,zen-stock+on-demand,zen-stock+lean-memory,origin+on-demand,origin+unload-1min --scenarios idle --runs 3
+
+run --batch profiler-1 --browsers "$BROWSERS,origin" --scenarios idle,minimized --runs 2 --profiler
 
 /usr/bin/python3 - "$here/variants.json" > /tmp/zo-effects-plan.txt <<'PY'
 import json, sys
@@ -39,9 +50,5 @@ PY
 while read -r scen configs; do
   run --batch effects-1 --browsers "$configs" --scenarios "$scen" --runs 3
 done < /tmp/zo-effects-plan.txt
-
-run --batch memory-1 --browsers firefox+on-demand,firefox+lean-memory,zen-stock+on-demand,zen-stock+lean-memory --scenarios idle --runs 3
-
-run --batch profiler-1 --browsers "$BROWSERS" --scenarios idle,minimized --runs 2 --profiler
 
 echo "m1 chain done"
