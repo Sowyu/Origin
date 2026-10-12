@@ -7,6 +7,7 @@ Update this file at the end of every work session. Newest log entry first.
 Milestone 2, the debloat, started 2026-10-13 at 00:10 on the user's word (see Decisions). Milestone 1's measurements finish inside it; its targets and demo fold into milestone 2's demo.
 
 Next action:
+0. 2026-10-13 01:10, the user ran low on usage. Job `after-build` (`../Zen-Origin-research/logs/after-build.sh`, log `after-build.log`) waits for the Origin build, installs `builds/origin-1.23.2b/Origin.app`, runs `scripts/perf/smoke origin`, makes the origin base and split templates and starts the chain `m1` (origin-1 first). If it stopped, read `after-build.log` and `perf.noindex/smoke/origin/smoke.json`. The cuts are still uncommitted in the working tree: commit them once the smoke test passes.
 1. The measurement chain `scripts/perf/m1-batches` runs detached as job `m1` (log `../Zen-Origin-research/logs/m1.log`, pid in `m1.pid`, restarted 2026-10-13 00:20): the rest of baseline-1 (Safari), effects-1 (69 runs, about 4.8 hours), memory-1, then profiler-1. It resumes where it stopped if rerun. Build only through `scripts/perf/hold`, which pauses it between runs.
 2. Four agents work in the tree without building or committing: Boosts; Glance, Space routing, Live folders, Share, Library and media controls; Mods, Welcome and the unlisted cuts; branding (Origin, bundle ID io.github.sowyu.origin, profile folder, placeholder icon, no Zen servers). When they report, review the diff, `git -C engine checkout` any file whose patch was dropped, run `npm run import` and build Origin through `scripts/perf/hold`, then smoke-test it.
 3. Then: research the privatefox and fastfox prefs against the shipped security features, add Origin's prefs (no spare processes, no preloaded new tab page, the effects the effects batch shows are costly), make an `origin` template, and measure Origin on every scenario (3 runs, with the no-browser floor) into batch origin-1.
@@ -64,7 +65,7 @@ Next action:
 ## Open questions for the user
 
 - Netflix, Spotify and Firefox Sync checks need accounts. How do you want to do them: sign in yourself through Screen Sharing on a build here, or on your MacBook with milestone 2's build, which has its own bundle ID? Today's stock build would open the real Zen profile on the MacBook.
-- Self-built builds have no Google Safe Browsing API key (Zen's CI injects one). Safe Browsing must work in the fork, so it needs its own key from a Google Cloud project (free, needs a Google account).
+- Safe Browsing needs its own Google key: without one, Origin registers no Google list, so phishing, malware and download blocking are off while Settings still shows them on (docs/research/startup-and-safebrowsing-2026-10-13.md). A free Google Cloud key works technically, but Google's terms bar commercial use without an agreement, so the user decides. Until then the download check still sends each download's URL and hash to Google for nothing; consider `browser.safebrowsing.downloads.remote.enabled` false while keyless.
 
 ## Facts learned
 
