@@ -14,7 +14,8 @@
     "startup.homepage_override_url": "",
     "trailhead.firstrun.didSeeAboutWelcome": true,
     "datareporting.policy.dataSubmissionPolicyBypassNotification": true,
-    "toolkit.legacyUserProfileCustomizations.stylesheets": true
+    "toolkit.legacyUserProfileCustomizations.stylesheets": true,
+    "browser.sessionstore.restore_pinned_tabs_on_demand": false
   },
   "zen": {
     "zen.welcome-screen.seen": true,
@@ -26,14 +27,91 @@
     "remote.prefs.recommended": false
   },
   "tabs": {
-    "work": ["mdn", "stackoverflow", "pythondocs", "rustblog"],
-    "personal": ["wikipedia", "guardian", "bbc", "arstechnica"],
-    "pinned": ["github", "hackernews"]
+    "work": [
+      "mdn",
+      "stackoverflow",
+      "pythondocs",
+      "rustblog"
+    ],
+    "personal": [
+      "wikipedia",
+      "guardian",
+      "bbc",
+      "arstechnica"
+    ],
+    "pinned": [
+      "github",
+      "hackernews"
+    ]
   },
   "themes": {
-    "work": [{"c": [117, 143, 230], "isCustom": false, "algorithm": "analogous", "isPrimary": true, "lightness": 60, "position": {"x": 140, "y": 90}, "type": "explicit-lightness"},
-             {"c": [176, 120, 230], "isCustom": false, "algorithm": "analogous", "isPrimary": false, "lightness": 60, "position": {"x": 190, "y": 70}, "type": "explicit-lightness"}],
-    "personal": [{"c": [240, 150, 110], "isCustom": false, "algorithm": "analogous", "isPrimary": true, "lightness": 65, "position": {"x": 90, "y": 190}, "type": "explicit-lightness"},
-                 {"c": [235, 110, 150], "isCustom": false, "algorithm": "analogous", "isPrimary": false, "lightness": 65, "position": {"x": 60, "y": 150}, "type": "explicit-lightness"}]
+    "work": [
+      {
+        "c": [
+          117,
+          143,
+          230
+        ],
+        "isCustom": false,
+        "algorithm": "analogous",
+        "isPrimary": true,
+        "lightness": 60,
+        "position": {
+          "x": 140,
+          "y": 90
+        },
+        "type": "explicit-lightness"
+      },
+      {
+        "c": [
+          176,
+          120,
+          230
+        ],
+        "isCustom": false,
+        "algorithm": "analogous",
+        "isPrimary": false,
+        "lightness": 60,
+        "position": {
+          "x": 190,
+          "y": 70
+        },
+        "type": "explicit-lightness"
+      }
+    ],
+    "personal": [
+      {
+        "c": [
+          240,
+          150,
+          110
+        ],
+        "isCustom": false,
+        "algorithm": "analogous",
+        "isPrimary": true,
+        "lightness": 65,
+        "position": {
+          "x": 90,
+          "y": 190
+        },
+        "type": "explicit-lightness"
+      },
+      {
+        "c": [
+          235,
+          110,
+          150
+        ],
+        "isCustom": false,
+        "algorithm": "analogous",
+        "isPrimary": false,
+        "lightness": 65,
+        "position": {
+          "x": 60,
+          "y": 150
+        },
+        "type": "explicit-lightness"
+      }
+    ]
   }
 }

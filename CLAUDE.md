@@ -38,12 +38,14 @@ Update `PROGRESS.md` before you stop: tick what you finished, add what you learn
 - No `gh`: use the GitHub REST API with the token from `git credential fill`. Never print the token.
 - Homebrew installs fail here (`/opt/homebrew/var/log` belongs to root), so tools go into `../Zen-Origin-research/tools`.
 - Never write to `~/.t3`. Kill only processes whose PID you started and recorded.
+- Official Zen and Firefox copies in `../Zen-Origin-research/builds/` stay byte-identical to their DMGs: editing the bundle breaks the seal and Gatekeeper calls Zen damaged. App updates are off through per-user policy defaults instead (`defaults write app.zen-browser.zen DisableAppUpdate -bool YES`, same for `org.mozilla.firefox`, plus `EnterprisePoliciesEnabled`).
+- A Safari that this harness did not start has run since 2026-10-09 (pid 27252). Never quit it; `open -n` starts a second instance beside it.
 - Long jobs (builds, measurement batches) must run detached in their own session, because the harness kills background commands at its time limit. Use `scripts/detach`.
 
 ## Repo layout
 
 - The repo root is Zen's tree. Branch `upstream` holds one snapshot commit per Zen release (Zen's full history is about 6 GB, so it is not imported). `main` is `upstream` plus our commits. To move to a new Zen tag, add its tree as a new `upstream` commit and `git rebase --onto upstream <old upstream> main`.
-- Zen's GitHub workflows are deleted on `main`, because their schedules would run in our public repo.
+- Zen's GitHub workflows are deleted on `main`, because their schedules would run in our public repo. `upstream` stays local: GitHub refuses it because its tree holds workflow files and our token has no `workflow` scope. Rebuild it from Zen's tags when needed (`git fetch --depth 1 <zen> refs/tags/<tag>` and `git commit-tree`).
 - `engine/` (Firefox source plus the object dir) and `.surfer/` are ignored by Zen's `.gitignore`. Large trees, downloads, tools, logs and builds live in `../Zen-Origin-research/`.
 - `docs/spec.md` is the brief, `docs/benchmarks.md` holds the method and numbers, `docs/cuts.md` lists every removed feature, `docs/research/` holds raw notes with sources. Zen's own docs (`docs/contribute.md` and others) stay where they are.
 - `scripts/env.sh` puts the pinned toolchains on PATH (Node 22, Python 3.11, Rust 1.95.0, GNU tar). Source it before any npm, surfer or mach command.
