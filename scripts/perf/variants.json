@@ -79,5 +79,25 @@
     "what": "Origin's tab unloader at 1 minute: the idle scenario settles 150 s, so it measures memory after background tabs unload",
     "prefs": {"origin.tabs.unload-after-minutes": 1},
     "scenarios": []
+  },
+  "quiet-newtab": {
+    "what": "Firefox's new tab machinery kept as quiet as prefs allow: blank homepage and new tab page, the 12 low-risk widget feeds and the wallpaper fetch off (docs/research/newtab-2026-10-13.md)",
+    "prefs": {"browser.startup.homepage": "about:blank",
+              "browser.newtabpage.enabled": false,
+              "browser.newtabpage.activity-stream.newtabWallpapers.enabled": false,
+              "browser.newtabpage.activity-stream.newtabWallpapers.v2.enabled": false,
+              "browser.newtabpage.activity-stream.feeds.weatherfeed": false,
+              "browser.newtabpage.activity-stream.feeds.stocksfeed": false,
+              "browser.newtabpage.activity-stream.feeds.adsfeed": false,
+              "browser.newtabpage.activity-stream.feeds.inferredpersonalizationfeed": false,
+              "browser.newtabpage.activity-stream.feeds.smartshortcutsfeed": false,
+              "browser.newtabpage.activity-stream.feeds.newtabattributionfeed": false,
+              "browser.newtabpage.activity-stream.feeds.listsfeed": false,
+              "browser.newtabpage.activity-stream.feeds.privacyfeed": false,
+              "browser.newtabpage.activity-stream.feeds.recentsearchesfeed": false,
+              "browser.newtabpage.activity-stream.feeds.pictureofthedayfeed": false,
+              "browser.newtabpage.activity-stream.feeds.timerfeed": false,
+              "browser.newtabpage.activity-stream.feeds.webnotificationsfeed": false},
+    "scenarios": []
   }
 }

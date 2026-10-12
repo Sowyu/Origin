@@ -34,6 +34,7 @@ run --batch baseline-1 --browsers "none,$BROWSERS,safari" --scenarios all --runs
 
 run --batch origin-1 --browsers zen-stock,origin,origin+min-visual --scenarios "$ACTIVE" --runs 3
 run --batch origin-1 --browsers none,origin --scenarios all --runs 3
+run --batch origin-1 --browsers origin,origin+quiet-newtab --scenarios launch,idle --runs 3
 
 run --batch memory-1 --browsers firefox+on-demand,firefox+lean-memory,zen-stock+on-demand,zen-stock+lean-memory,origin+on-demand,origin+unload-1min --scenarios idle --runs 3
 
