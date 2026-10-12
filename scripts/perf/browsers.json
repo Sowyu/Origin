@@ -45,5 +45,12 @@
     "engine": "none",
     "ui": "none",
     "note": "no browser: WindowServer's coalition and the machine with nothing launched, for scale"
+  },
+  "origin-signed": {
+    "app": "builds/origin-1.23.2b-signed/Origin.app",
+    "engine": "gecko",
+    "ui": "zen",
+    "template": "origin-1.23.2b",
+    "note": "origin signed with the Apple Development identity and Firefox's hardened runtime entitlements (scripts/sign-app); for the DRM check"
   }
 }
