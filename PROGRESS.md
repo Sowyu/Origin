@@ -47,6 +47,8 @@ Next action:
 
 ## Decisions made
 
+- 2026-10-13 01:50: The user approved replacing Zen's Nucleo icons with the Phosphor set ("yes it looks ok just make sure it looks good"). Build v2 (`builds/origin-1.23.2b-v2`, browser `origin-v2`) carries them with lazy loading, the startup trims, the idle trim (off) and Origin's DMG art. Job `after-build-v2` smoke-tests it and runs `scripts/perf/uicheck` on v2 and stock Zen; compare the screenshots in `perf.noindex/uicheck/` before measuring v2.
+- 2026-10-13: Agents share this Mac, so the chain allows a load of 8 and runs stock Zen interleaved with Origin in every scenario. Posting an inline page in this thread woke CandyWrapper's T3 client and stole focus from a run; don't post pages while runs need focus.
 - 2026-10-13 00:10: The user wrote "just debloat zen until system resources is minimal and battery usage is also minimal then show me the numbers". I took it as the OK to start milestone 2 with `docs/cuts.md` as drafted (the user struck nothing) and with "as low as the harness can show" as the target. The site data panel and the hidden AI settings page wait, because they need a visual check and pref decisions. The "replace with Firefox's own" items wait for the rewrite study.
 - 2026-10-13: Measurements and builds never overlap. `scripts/perf/hold` pauses the chain between runs, and each run's quiet wait keeps it paused.
 - 2026-10-12: The repo is Zen's tree at the root with our files added. Zen's history is about 6 GB, so `upstream` holds one parentless snapshot commit per Zen release. GitHub refuses to take `upstream` (its tree has workflow files and the token has no `workflow` scope), so it stays local and can be rebuilt from Zen's tags.

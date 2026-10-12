@@ -52,5 +52,12 @@
     "ui": "zen",
     "template": "origin-1.23.2b",
     "note": "origin signed with the Apple Development identity and Firefox's hardened runtime entitlements (scripts/sign-app); for the DRM check"
+  },
+  "origin-v2": {
+    "app": "builds/origin-1.23.2b-v2/Origin.app",
+    "engine": "gecko",
+    "ui": "zen",
+    "template": "origin-v2",
+    "note": "Origin's second build: adds Phosphor icons, lazy loading, startup trims, the idle trim (off) and Origin's DMG art"
   }
 }
