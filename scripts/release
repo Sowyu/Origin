@@ -1,0 +1,388 @@
+#!/usr/bin/python3 -I
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Packages one Origin release from a built and signed Origin.app and makes a draft GitHub release.
+
+    scripts/release <Origin.app> [--out DIR] [--commit REF]                       dry run (default)
+    scripts/release <Origin.app> --publish --notes FILE --feed-host HOST \\
+        --key-b-home WHERE --name-final NAME [--keychain NAME|PATH]               real run
+
+Give it the packaged app (engine/obj-aarch64-apple-darwin/dist/origin/Origin.app) after
+scripts/sign-app. The MAR must come from the signed app, because the code signature is part of the
+bundle (research finding 4).
+
+Steps, in order:
+1. Read version and build ID from the app's application.ini, check the code signature and team, and
+   check the gates below. A dry run prints every gate that would stop a real run and goes on.
+2. Copy the app with ditto into the work folder, so MAR and DMG come from the same bytes.
+3. Origin-<ver>-arm64.dmg with hdiutil (UDZO, app plus an /Applications link).
+4. Complete MAR with engine/tools/update-packaging/make_full_update.sh, stamped channel `release`
+   and product version <ver>, then `mar -T` to check the stamp.
+5. Real run only: sign the MAR with key A. The PKCS#12 comes out of the release keychain (written by
+   scripts/release-keys, in parts) into a throwaway mode-700 NSS database, signmar signs, and the database is
+   deleted in a finally block. Then signmar verifies the MAR in a second database that holds only
+   configs/updater/release_primary.der, which is what the updater does.
+6. SHA256SUMS for the DMG and MAR.
+7. feed/updates/browser/Darwin_aarch64-gcc3/release/update.xml, matching surfer's URL
+   https://<feed host>/updates/browser/%BUILD_TARGET%/%CHANNEL%/update.xml, written after signing so
+   the SHA-512 and size are the signed file's. The MAR URL is
+   https://github.com/Sowyu/Origin/releases/download/<ver>/Origin-<ver>-arm64.mar (bare tag, no v).
+8. Real run only: a draft release <ver> on Sowyu/Origin through the REST API with the token from
+   `git credential fill` (never printed), assets DMG, MAR, SHA256SUMS and update.xml, each downloaded
+   back and hash-checked. A rerun replaces the assets of an existing draft and refuses a published tag.
+
+It does not publish the draft or the feed. After you publish the draft, copy feed/updates/ to the
+feed host. The MAR has to be downloadable before the feed names it.
+
+Gates that stop a real run until the user decides:
+- --feed-host: the feed host is undecided (sowyu.github.io/Origin, a separate repo such as
+  sowyu.github.io/updates, or a custom domain). The app's [AppUpdate] URL must use it.
+- --key-b-home: where key B lives is undecided. Key B is baked into every updater we ship, so the
+  user must say where it is kept before the first release (spec: ask before a key leaves this Mac).
+- --name-final: the name and icon are not confirmed. The value must equal the app's CFBundleName.
+- --notes: release notes. Lines that look like AI attribution stop the run.
+
+What milestone 5 still has to change elsewhere (this script does not touch these files):
+- configs/macos/mozconfig: delete `--disable-updater` and its ponytail note, and add
+  `ac_add_options --enable-mac-elevated-updates-with-generic-certs`. Until then the app has no
+  [AppUpdate] URL and this script's real run stops at the feed gate.
+- scripts/build-origin: after its `git -C engine checkout -- .` reset, copy
+  configs/updater/release_primary.der over engine/toolkit/mozapps/update/updater/release_primary.der
+  and dep1.der, and release_secondary.der over release_secondary.der and dep2.der, before building.
+  This script checks that the app's updater embeds both certificates and stops if not.
+- surfer.json: set "updateHostname" to the feed host, which writes MOZ_APPUPDATE_HOST and so the
+  update URL in application.ini (engine/build/application.ini.in:53-55).
+- scripts/build-origin ends at `package` and does not sign; run scripts/sign-app on the packaged app
+  before this script.
+"""
+import argparse, base64, configparser, datetime, hashlib, json, os, plistlib, re, shutil, subprocess, sys, tempfile
+import urllib.error, urllib.parse, urllib.request
+import xml.etree.ElementTree as ET
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DIST = os.path.join(ROOT, "engine", "obj-aarch64-apple-darwin", "dist")
+BIN = os.path.join(DIST, "bin")
+HOST_MAR = os.path.join(DIST, "host", "bin", "mar")
+MAKE_FULL = os.path.join(ROOT, "engine", "tools", "update-packaging", "make_full_update.sh")
+DER_DIR = os.path.join(ROOT, "configs", "updater")
+RESEARCH = os.path.join(os.path.dirname(ROOT), "Zen-Origin-research")
+REPO = "Sowyu/Origin"
+TEAM = "8Q677AYRU7"
+CHANNEL = "release"
+BUILD_TARGET = "Darwin_aarch64-gcc3"  # runtime value unverified, check about:support on the first build
+KEY_A = "io.github.sowyu.origin.mar-key-a"
+KC_PW_SERVICE = "io.github.sowyu.origin.keychain-password"
+AI_LINE = re.compile(r"co-authored-by:.*(claude|anthropic|openai|copilot)|generated with|written by (ai|claude|chatgpt)", re.I)
+
+
+def run(cmd, env=None, cwd=None, data=None):
+    r = subprocess.run(cmd, capture_output=True, env=env, cwd=cwd, input=data)
+    if r.returncode != 0:
+        sys.exit("%s failed (%d)\n%s" % (" ".join(cmd[:3]), r.returncode, (r.stdout + r.stderr).decode(errors="replace").strip()[-2000:]))
+    return r.stdout
+
+
+def ini(path):
+    c = configparser.ConfigParser(interpolation=None, strict=False)
+    c.optionxform = str
+    c.read(path, encoding="utf-8")
+    return c
+
+
+def sha(path, algo):
+    h = hashlib.new(algo)
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def keychain_path(name):
+    return os.path.abspath(name) if "/" in name else os.path.expanduser("~/Library/Keychains/%s.keychain-db" % name)
+
+
+def check_app(app, a):
+    """Returns (info dict, list of gate failures). Every failure stops a real run."""
+    res = os.path.join(app, "Contents", "Resources")
+    appini, plat = ini(os.path.join(res, "application.ini")), ini(os.path.join(res, "platform.ini"))
+    plist = plistlib.load(open(os.path.join(app, "Contents", "Info.plist"), "rb"))
+    info = {
+        "version": a.version or appini.get("App", "Version"),
+        # Services.appinfo.appBuildID comes from application.ini, and UpdateService compares with that.
+        "build_id": appini.get("App", "BuildID"),
+        "platform_version": plat.get("Build", "Milestone", fallback=appini.get("Gecko", "MinVersion", fallback="")),
+        "update_url": appini.get("AppUpdate", "URL", fallback=""),
+        "name": plist.get("CFBundleName", ""),
+    }
+    gates = []
+    sig = subprocess.run(["codesign", "--verify", "--deep", "--strict", app], capture_output=True)
+    team = subprocess.run(["codesign", "-dv", app], capture_output=True, text=True).stderr
+    team = next((l.split("=", 1)[1] for l in team.splitlines() if l.startswith("TeamIdentifier=")), "none")
+    if sig.returncode != 0 or team != TEAM:
+        gates.append("app signature: codesign verify %s, team %s (want %s). Run scripts/sign-app on it first"
+                     % ("ok" if sig.returncode == 0 else "failed", team, TEAM))
+    if not os.path.exists(os.path.join(res, "precomplete")):
+        sys.exit("no Contents/Resources/precomplete: pass the packaged app from dist/origin/, not dist/Origin.app")
+
+    # Feed host.
+    if not a.feed_host:
+        gates.append("feed host undecided: pass --feed-host (sowyu.github.io/Origin, sowyu.github.io/updates or a domain)")
+    elif not info["update_url"].startswith("https://%s/updates/browser/" % a.feed_host):
+        gates.append("app's [AppUpdate] URL is %r, not on https://%s/updates/browser/. Set updateHostname in "
+                     "surfer.json, remove --disable-updater and rebuild" % (info["update_url"] or "missing", a.feed_host))
+
+    # Our certificates in the updater. gen_cert_header.py embeds the DER bytes verbatim.
+    updater = os.path.join(app, "Contents", "MacOS", "updater.app", "Contents", "MacOS", "org.mozilla.updater")
+    blob = open(updater, "rb").read() if os.path.exists(updater) else b""
+    for der in ("release_primary.der", "release_secondary.der"):
+        p = os.path.join(DER_DIR, der)
+        if not os.path.exists(p):
+            gates.append("%s missing: run scripts/release-keys (ask the user first)" % p)
+        elif not blob:
+            gates.append("app has no updater (%s): the build still has --disable-updater" % updater)
+        elif open(p, "rb").read() not in blob:
+            gates.append("the app's updater does not embed %s: copy it into engine/ after build-origin's reset and rebuild" % der)
+
+    if not a.key_b_home:
+        gates.append("key B's home undecided: ask the user where key B lives, then pass --key-b-home '<where>'")
+    if not a.name_final:
+        gates.append("name and icon not confirmed: ask the user, then pass --name-final <the confirmed name>")
+    elif a.name_final != info["name"]:
+        gates.append("--name-final %r does not match the app's CFBundleName %r" % (a.name_final, info["name"]))
+
+    if not a.notes:
+        gates.append("release notes missing: pass --notes FILE")
+    else:
+        for n, line in enumerate(open(a.notes, encoding="utf-8"), 1):
+            if AI_LINE.search(line):
+                gates.append("%s:%d looks like AI attribution, remove it: %s" % (a.notes, n, line.strip()))
+    if not re.fullmatch(r"[0-9][0-9A-Za-z.\-]*", info["version"]):
+        sys.exit("odd version %r" % info["version"])
+    return info, gates
+
+
+def make_dmg(app, out, name, dmg):
+    stage = os.path.join(out, "dmg-stage")
+    shutil.rmtree(stage, ignore_errors=True)
+    os.mkdir(stage)
+    run(["ditto", app, os.path.join(stage, os.path.basename(app))])
+    os.symlink("/Applications", os.path.join(stage, "Applications"))
+    # ponytail: plain hdiutil DMG without background or signature, add make_dmg's layout if users ask.
+    run(["hdiutil", "create", "-quiet", "-volname", name, "-srcfolder", stage, "-fs", "HFS+", "-format", "UDZO",
+         "-ov", os.path.join(out, dmg)])
+    shutil.rmtree(stage)
+
+
+def make_mar(app, out, version, unsigned):
+    env = dict(os.environ, MAR=HOST_MAR, MOZ_PRODUCT_VERSION=version, MAR_CHANNEL_ID=CHANNEL,
+               ACCEPTED_MAR_CHANNEL_IDS=CHANNEL)
+    if not shutil.which(env.get("XZ", "xz")):
+        sys.exit("make_full_update.sh needs xz on PATH or in $XZ")
+    run(["bash", MAKE_FULL, "-q", unsigned, app], env=env, cwd=os.path.join(ROOT, "engine"))
+    stamp = run([HOST_MAR, "-T", unsigned]).decode(errors="replace")
+    if ("MAR channel name: %s" % CHANNEL) not in stamp or ("Product version: %s" % version) not in stamp:
+        sys.exit("MAR stamp is wrong:\n" + stamp[:500])
+
+
+def sign_mar(unsigned, signed, keychain):
+    certutil, pk12util, signmar = (os.path.join(BIN, t) for t in ("certutil", "pk12util", "signmar"))
+    kc = keychain_path(keychain)
+    acct = os.path.basename(kc).split(".keychain")[0]
+    pw = run(["/usr/bin/security", "find-generic-password", "-a", acct, "-s", KC_PW_SERVICE, "-w", "login.keychain-db"]).strip()
+    r = subprocess.run(["/usr/bin/security", "-i"], input=b"unlock-keychain -p " + pw + b" " + kc.encode() + b"\n", capture_output=True)
+    del pw
+    if r.returncode != 0 or (r.stdout + r.stderr).strip():
+        sys.exit("could not unlock %s" % kc)
+    run(["/usr/bin/security", "set-keychain-settings", "-t", "300", "-l", kc])
+    old = os.umask(0o077)
+    work = tempfile.mkdtemp(prefix="origin-sign-")  # mode 700
+    try:
+        # scripts/release-keys stores the base64 PKCS#12 in parts (security -i's line limit).
+        b64, i = b"", 0
+        while subprocess.run(["/usr/bin/security", "find-generic-password", "-a", "part-%d" % i, "-s", KEY_A, kc],
+                             capture_output=True).returncode == 0:
+            b64 += run(["/usr/bin/security", "find-generic-password", "-a", "part-%d" % i, "-s", KEY_A, "-w", kc]).strip()
+            i += 1
+        if not b64:
+            sys.exit("no key A (%s) in %s: run scripts/release-keys" % (KEY_A, kc))
+        p12pw = run(["/usr/bin/security", "find-generic-password", "-a", "release", "-s", KEY_A + ".p12-password", "-w", kc]).strip()
+        db, vdb = os.path.join(work, "nss"), os.path.join(work, "verify")
+        os.mkdir(db); os.mkdir(vdb)
+        empty, pwfile, p12 = (os.path.join(work, n) for n in ("empty", "p12pw", "a.p12"))
+        open(empty, "w").close()
+        with open(pwfile, "wb") as f:
+            f.write(p12pw)
+        with open(p12, "wb") as f:
+            f.write(base64.b64decode(b64))
+        del b64, p12pw
+        run([certutil, "-N", "-d", db, "--empty-password"])
+        run([pk12util, "-i", p12, "-d", db, "-k", empty, "-w", pwfile])
+        os.remove(p12); os.remove(pwfile)
+        run([signmar, "-d", db, "-n", "origin-mar-a", "-s", unsigned, signed])
+        shutil.rmtree(db)  # the private key is gone before anything else runs
+        # Verify like the updater: only the public certificate from the repo.
+        run([certutil, "-N", "-d", vdb, "--empty-password"])
+        run([certutil, "-A", "-d", vdb, "-n", "origin-mar-a", "-t", ",,", "-i", os.path.join(DER_DIR, "release_primary.der")])
+        run([signmar, "-d", vdb, "-n", "origin-mar-a", "-v", signed])
+    finally:
+        # ponytail: rmtree on the SSD, the key sat in mode-700 files for seconds; use a RAM disk if that is not enough.
+        shutil.rmtree(work, ignore_errors=True)
+        os.umask(old)
+        subprocess.run(["/usr/bin/security", "lock-keychain", kc], capture_output=True)
+    print("signed and verified %s with key A" % os.path.basename(signed))
+
+
+def write_feed(out, info, mar, feed_host):
+    v = info["version"]
+    root = ET.Element("updates")
+    up = ET.SubElement(root, "update", type="minor", displayVersion=v, appVersion=v,
+                       platformVersion=info["platform_version"], buildID=info["build_id"])
+    ET.SubElement(up, "patch", type="complete",
+                  URL="https://github.com/%s/releases/download/%s/%s" % (REPO, v, os.path.basename(mar)),
+                  hashFunction="sha512", hashValue=sha(mar, "sha512"), size=str(os.path.getsize(mar)))
+    d = os.path.join(out, "feed", "updates", "browser", BUILD_TARGET, CHANNEL)
+    os.makedirs(d, exist_ok=True)
+    path = os.path.join(d, "update.xml")
+    ET.indent(root)
+    with open(path, "wb") as f:
+        f.write(b'<?xml version="1.0"?>\n' + ET.tostring(root) + b"\n")
+    print("feed: %s -> https://%s/updates/browser/%s/%s/update.xml" % (path, feed_host, BUILD_TARGET, CHANNEL))
+    return path
+
+
+def publish(out, info, sha_commit, notes, assets):
+    cred = subprocess.run(["git", "credential", "fill"], input="protocol=https\nhost=github.com\n\n",
+                          capture_output=True, text=True, check=True).stdout
+    token = dict(l.split("=", 1) for l in cred.splitlines() if "=" in l)["password"]
+    api = "https://api.github.com/repos/" + REPO
+
+    class DropAuthOnRedirect(urllib.request.HTTPRedirectHandler):
+        # Asset downloads redirect to object storage, which rejects a second auth mechanism.
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            new = super().redirect_request(req, fp, code, msg, headers, newurl)
+            if new is not None and urllib.parse.urlparse(newurl).netloc != urllib.parse.urlparse(req.full_url).netloc:
+                new.remove_header("Authorization")
+            return new
+    opener = urllib.request.build_opener(DropAuthOnRedirect)
+
+    def call(url, data=None, ctype="application/json", method=None, accept="application/vnd.github+json", raw=False):
+        req = urllib.request.Request(url, data=data, method=method)
+        req.add_header("Authorization", "Bearer " + token)
+        req.add_header("Accept", accept)
+        req.add_header("X-GitHub-Api-Version", "2022-11-28")
+        if data is not None:
+            req.add_header("Content-Type", ctype)
+        with opener.open(req) as r:
+            body = r.read()
+            return body if raw else (json.loads(body) if body else None)
+
+    tag = info["version"]
+    # Drafts have no tag yet, so /releases/tags/<tag> does not find them; list instead.
+    # ponytail: reads the newest 100 releases only, page through them once Origin has that many
+    same = [r for r in call(api + "/releases?per_page=100") if r["tag_name"] == tag]
+    if any(not r["draft"] for r in same):
+        sys.exit("release %s is already published; bump the version" % tag)
+    if same:
+        rel = same[0]
+        print("reusing draft %s, replacing its assets" % rel["html_url"])
+    else:
+        rel = call(api + "/releases", json.dumps({
+            "tag_name": tag, "target_commitish": sha_commit, "name": "Origin " + tag,
+            "body": open(notes, encoding="utf-8").read(), "draft": True, "prerelease": False}).encode())
+        print("created draft %s" % rel["html_url"])
+    for path, ctype in assets:
+        name = os.path.basename(path)
+        for old in rel.get("assets", []):
+            if old["name"] == name:
+                call(api + "/releases/assets/%d" % old["id"], method="DELETE")
+        data = open(path, "rb").read()
+        asset = call("https://uploads.github.com/repos/%s/releases/%d/assets?name=%s" % (REPO, rel["id"], urllib.parse.quote(name)),
+                     data, ctype)
+        got = call(api + "/releases/assets/%d" % asset["id"], accept="application/octet-stream", raw=True)
+        if hashlib.sha256(got).digest() != hashlib.sha256(data).digest():
+            sys.exit("download of %s does not match the upload" % name)
+        print("uploaded %s (%d bytes, checked)" % (name, len(data)))
+    print("draft ready: %s\nNext: review and publish it on GitHub, then copy %s/feed/updates/ to the feed host."
+          % (rel["html_url"], out))
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p.add_argument("app")
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument("--dry-run", action="store_true", default=True, help="default: everything except signing and uploading")
+    mode.add_argument("--publish", action="store_true", help="sign the MAR and create the draft release")
+    p.add_argument("--out", help="work folder (default ../Zen-Origin-research/releases/origin-<ver>-<time>)")
+    p.add_argument("--commit", default="HEAD", help="commit the tag points at (default HEAD, must be on GitHub)")
+    p.add_argument("--version", help="override the version from application.ini (testing only)")
+    p.add_argument("--notes", help="release notes in markdown, the release body")
+    p.add_argument("--feed-host", help="DECISION: host and path prefix that serves updates/, such as sowyu.github.io/updates")
+    p.add_argument("--key-b-home", help="DECISION: where the user keeps key B, recorded in the run log only")
+    p.add_argument("--name-final", help="DECISION: the name the user confirmed together with the icon")
+    p.add_argument("--keychain", default="origin-release", help="release keychain holding key A")
+    a = p.parse_args()
+    real = a.publish
+    if real and a.version:
+        sys.exit("--version is for dry runs only")
+    app = os.path.abspath(a.app.rstrip("/"))
+    if not os.path.isdir(os.path.join(app, "Contents")):
+        sys.exit("not an app: %s" % app)
+    for tool in [HOST_MAR, MAKE_FULL] + ([os.path.join(BIN, t) for t in ("certutil", "pk12util", "signmar")] if real else []):
+        if not os.path.exists(tool):
+            sys.exit("missing %s" % tool)
+
+    info, gates = check_app(app, a)
+    commit = run(["git", "-C", ROOT, "rev-parse", "--verify", a.commit + "^{commit}"]).decode().strip()
+    if real and run(["git", "-C", ROOT, "status", "--porcelain"]).strip():
+        gates.append("the work tree has uncommitted changes; commit them so the tag matches the build")
+    v = info["version"]
+    name = info["name"] or "Origin"
+    out = os.path.abspath(a.out or os.path.join(RESEARCH, "releases", "origin-%s-%s" % (v, datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))))
+    dmg, mar = "%s-%s-arm64.dmg" % (name, v), "%s-%s-arm64.mar" % (name, v)
+
+    print("%s for %s %s (build %s, Firefox %s) from commit %s" % ("RELEASE" if real else "DRY RUN", name, v,
+          info["build_id"], info["platform_version"], commit[:12]))
+    print("  app      %s\n  out      %s" % (app, out))
+    print("  dmg      %s\n  mar      %s, channel %s, %s" % (dmg, mar, CHANNEL, "signed with key A" if real else "UNSIGNED in a dry run"))
+    print("  feed     https://%s/updates/browser/%s/%s/update.xml" % (a.feed_host or "<feed host undecided>", BUILD_TARGET, CHANNEL))
+    print("  release  %s draft %s on github.com/%s with %s, %s, SHA256SUMS, update.xml" % ("create" if real else "would create", v, REPO, dmg, mar))
+    if a.key_b_home:
+        print("  key B    kept at: %s" % a.key_b_home)
+    for g in gates:
+        print(("STOP: " if real else "would stop a real run: ") + g)
+    if real and gates:
+        sys.exit("nothing done: settle the items above")
+
+    os.makedirs(out, exist_ok=True)
+    if os.listdir(out):
+        sys.exit("%s is not empty" % out)
+    copy = os.path.join(out, "app", os.path.basename(app))
+    run(["ditto", app, copy])
+    make_dmg(copy, out, name, dmg)
+    print("made %s (%d bytes)" % (dmg, os.path.getsize(os.path.join(out, dmg))))
+    unsigned = os.path.join(out, "unsigned.mar")
+    make_mar(copy, out, v, unsigned)
+    print("made complete MAR (%d bytes)" % os.path.getsize(unsigned))
+    if real:
+        sign_mar(unsigned, os.path.join(out, mar), a.keychain)
+        os.remove(unsigned)
+    else:
+        os.rename(unsigned, os.path.join(out, mar))
+        open(os.path.join(out, "DRY-RUN-UNSIGNED"), "w").write("The MAR here is unsigned. Do not publish.\n")
+    with open(os.path.join(out, "SHA256SUMS"), "w") as f:
+        for n in (dmg, mar):
+            f.write("%s  %s\n" % (sha(os.path.join(out, n), "sha256"), n))
+    feed = write_feed(out, info, os.path.join(out, mar), a.feed_host or "<feed host undecided>")
+    shutil.rmtree(os.path.join(out, "app"))
+    if not real:
+        print("dry run done: nothing signed, nothing uploaded. Files in %s" % out)
+        return
+    publish(out, info, commit, a.notes, [(os.path.join(out, dmg), "application/x-apple-diskimage"),
+                                         (os.path.join(out, mar), "application/octet-stream"),
+                                         (os.path.join(out, "SHA256SUMS"), "text/plain"),
+                                         (feed, "application/xml")])
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,248 @@
+#!/usr/bin/python3 -I
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Creates Origin's two MAR signing keys once (docs/research/release-2026-10-13.md, "MAR signing").
+
+    scripts/release-keys [--keychain NAME|PATH] [--keychain-b NAME|PATH] --yes
+
+Key A signs every MAR and goes into release_primary.der. Key B is the rotation key in
+release_secondary.der: the updater accepts a MAR signed by either one (archivereader.cpp:78-95), so
+B lets us keep shipping if A is lost or leaks. A MAR carries exactly one signature; never sign with
+both (mar_verify.c:281).
+
+What it does:
+1. Makes a throwaway NSS database (mkdtemp, mode 700) and generates two self-signed RSA 4096 /
+   SHA-384 certificates in it with certutil from the object dir.
+2. Exports each certificate as DER to configs/updater/release_primary.der (A) and
+   release_secondary.der (B). These are public and belong in the repo.
+3. Exports each key as PKCS#12 with a random password and stores two generic passwords per key in
+   the release keychain: service io.github.sowyu.origin.mar-key-<a|b> holds the base64 PKCS#12 in
+   accounts part-0, part-1 and so on, and service io.github.sowyu.origin.mar-key-<a|b>.p12-password,
+   account release, its password. Secrets go to `security -i` on stdin, never on argv. `security -i`
+   splits lines longer than about 4 KB (tried 2026-10-13), and the base64 is about 5 KB, hence parts.
+4. Creates the keychain if it is missing (~/Library/Keychains/<name>.keychain-db), with a random
+   password kept in the login keychain under service io.github.sowyu.origin.keychain-password,
+   account <name>, the CandyWrapper pattern. The keychain is kept out of the search list, locks after
+   5 idle minutes and on sleep, and this script locks it on exit.
+5. Signs a tiny test MAR with each key and verifies it against the exported DER in a second NSS
+   database that holds only the public certificate, then deletes both databases.
+
+It refuses to run if a .der file or a keychain item already exists, so it never replaces a key.
+B goes into the same keychain unless --keychain-b names another one. Where B finally lives is the
+user's decision (spec: ask before a signing key leaves this Mac). This script never copies it off
+the Mac.
+
+What milestone 5 still has to change elsewhere (this script does not touch these files):
+- configs/macos/mozconfig: delete `--disable-updater` and its ponytail note, and add
+  `ac_add_options --enable-mac-elevated-updates-with-generic-certs`. Without it the privileged helper
+  requires Mozilla's team 9V5K9TP787 and elevated updates fail for team 8Q677AYRU7.
+- scripts/build-origin: after `git -C engine checkout -- .` restores Mozilla's certificates, copy
+  configs/updater/release_primary.der over engine/toolkit/mozapps/update/updater/release_primary.der
+  and dep1.der, and release_secondary.der over release_secondary.der and dep2.der. Otherwise the
+  built updater trusts Mozilla's keys and rejects every Origin MAR.
+- surfer.json: add "updateHostname" (the feed host) so the [AppUpdate] URL in application.ini
+  becomes https://<host>/updates/browser/%BUILD_TARGET%/%CHANNEL%/update.xml instead of surfer's
+  dead localhost:7648. Never set --enable-unverified-updates.
+"""
+import argparse, base64, os, secrets, shutil, subprocess, sys, tempfile
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OBJ = os.path.join(ROOT, "engine", "obj-aarch64-apple-darwin", "dist")
+BIN = os.path.join(OBJ, "bin")
+HOST_MAR = os.path.join(OBJ, "host", "bin", "mar")
+DER_DIR = os.path.join(ROOT, "configs", "updater")
+SERVICE = "io.github.sowyu.origin.mar-key-%s"
+KC_PW_SERVICE = "io.github.sowyu.origin.keychain-password"
+KEYS = [("a", "release_primary.der", "Origin MAR signing key A"),
+        ("b", "release_secondary.der", "Origin MAR signing key B")]
+
+
+def keychain_path(name):
+    if "/" in name:
+        return os.path.abspath(name)
+    return os.path.expanduser("~/Library/Keychains/%s.keychain-db" % name)
+
+
+def kc_account(path):
+    return os.path.basename(path).split(".keychain")[0]
+
+
+def run(cmd, data=None, ok=(0,)):
+    r = subprocess.run(cmd, input=data, capture_output=True)
+    if r.returncode not in ok:
+        sys.exit("%s failed (%d)\n%s" % (os.path.basename(cmd[0]) + " " + " ".join(cmd[1:3]), r.returncode,
+                                         r.stderr.decode(errors="replace").strip()))
+    return r
+
+
+def security_stdin(line):
+    """One `security -i` command with secrets on stdin. Values are base64 or hex, so no quoting issues."""
+    r = subprocess.run(["/usr/bin/security", "-i"], input=(line + "\n").encode(), capture_output=True)
+    err = (r.stdout + r.stderr).decode(errors="replace")
+    # These commands print nothing on success, and `security -i` exits 0 even when one fails.
+    if r.returncode != 0 or err.strip():
+        # The line holds a secret, so report only the command name and security's message.
+        sys.exit("security %s failed: %s" % (line.split()[0], err.strip().splitlines()[-1:] or ""))
+
+
+def item_exists(service, kc, account="release"):
+    return subprocess.run(["/usr/bin/security", "find-generic-password", "-a", account, "-s", service, kc],
+                          capture_output=True).returncode == 0
+
+
+def read_item(service, kc, account="release"):
+    return run(["/usr/bin/security", "find-generic-password", "-a", account, "-s", service, "-w", kc]).stdout.strip()
+
+
+PART = 3000  # characters per keychain item, under security -i's line limit
+
+
+def put_parts(service, value, kc):
+    for i in range(0, len(value), PART):
+        security_stdin("add-generic-password -a part-%d -s %s -T /usr/bin/security -w %s %s" % (i // PART, service, value[i:i + PART], kc))
+
+
+def get_parts(service, kc):
+    parts, i = [], 0
+    while item_exists(service, kc, "part-%d" % i):
+        parts.append(read_item(service, kc, "part-%d" % i).decode())
+        i += 1
+    return "".join(parts)
+
+
+def plan(kcs):
+    lines = ["scripts/release-keys will:"]
+    for (k, der, cn), kc in zip(KEYS, kcs):
+        lines.append("  - generate RSA 4096 key %s (%s) with %s" % (k.upper(), cn, os.path.join(BIN, "certutil")))
+        lines.append("  - write its public certificate to %s" % os.path.join(DER_DIR, der))
+        lines.append("  - store its PKCS#12 and password as %s(.p12-password) in %s" % (SERVICE % k, kc))
+    for kc in sorted(set(kcs)):
+        if os.path.exists(kc):
+            lines.append("  - unlock %s with login keychain item %s/%s" % (kc, KC_PW_SERVICE, kc_account(kc)))
+        else:
+            lines.append("  - create %s with a random password saved in the login keychain as %s/%s, "
+                         "outside the search list" % (kc, KC_PW_SERVICE, kc_account(kc)))
+    lines.append("  - test-sign a small MAR with each key, verify it against the DER, delete both NSS databases")
+    lines.append("  - lock the keychain(s) on exit")
+    return "\n".join(lines)
+
+
+def open_keychain(kc, opened):
+    acct = kc_account(kc)
+    if not os.path.exists(kc):
+        pw = secrets.token_hex(32)
+        if item_exists(KC_PW_SERVICE, "login.keychain-db", acct):
+            sys.exit("login keychain already has %s/%s but %s is missing; sort that out first" % (KC_PW_SERVICE, acct, kc))
+        security_stdin("add-generic-password -a %s -s %s -T /usr/bin/security -w %s login.keychain-db" % (acct, KC_PW_SERVICE, pw))
+        before = [l.strip().strip('"') for l in run(["/usr/bin/security", "list-keychains", "-d", "user"]).stdout.decode().splitlines() if l.strip()]
+        security_stdin("create-keychain -p %s %s" % (pw, kc))
+        # create-keychain adds the keychain to the search list. Put the old list back so a locked release
+        # keychain never pops a password dialog for other tools.
+        run(["/usr/bin/security", "list-keychains", "-d", "user", "-s"] + before)
+        print("created %s" % kc)
+    else:
+        pw = read_item(KC_PW_SERVICE, "login.keychain-db", acct).decode()
+    security_stdin("unlock-keychain -p %s %s" % (pw, kc))
+    run(["/usr/bin/security", "set-keychain-settings", "-t", "300", "-l", kc])
+    opened.add(kc)
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p.add_argument("--keychain", default="origin-release", help="name in ~/Library/Keychains or a path (default origin-release)")
+    p.add_argument("--keychain-b", help="keychain for key B (default: same as --keychain)")
+    p.add_argument("--yes", action="store_true", help="do it; without this the script only prints the plan")
+    a = p.parse_args()
+    kc_a = keychain_path(a.keychain)
+    kcs = [kc_a, keychain_path(a.keychain_b) if a.keychain_b else kc_a]
+    print(plan(kcs))
+
+    problems = []
+    for tool in ("certutil", "pk12util", "signmar"):
+        if not os.access(os.path.join(BIN, tool), os.X_OK):
+            problems.append("missing %s; build the engine first" % os.path.join(BIN, tool))
+    if not os.access(HOST_MAR, os.X_OK):
+        problems.append("missing %s" % HOST_MAR)
+    for (k, der, _), kc in zip(KEYS, kcs):
+        if os.path.exists(os.path.join(DER_DIR, der)):
+            problems.append("%s exists: keys were made already, refusing to replace them" % os.path.join(DER_DIR, der))
+        if os.path.exists(kc):
+            for svc, acct in ((SERVICE % k, "part-0"), (SERVICE % k + ".p12-password", "release")):
+                if item_exists(svc, kc, acct):
+                    problems.append("%s already holds %s, refusing to replace it" % (kc, svc))
+    if problems:
+        sys.exit("\n".join(problems))
+    if not a.yes:
+        sys.exit("nothing done: rerun with --yes")
+
+    os.umask(0o077)
+    opened = set()
+    work = tempfile.mkdtemp(prefix="origin-keys-")  # mode 700
+    try:
+        db, vdb = os.path.join(work, "nss"), os.path.join(work, "verify")
+        os.mkdir(db); os.mkdir(vdb)
+        certutil, pk12util, signmar = (os.path.join(BIN, t) for t in ("certutil", "pk12util", "signmar"))
+        run([certutil, "-N", "-d", db, "--empty-password"])
+        run([certutil, "-N", "-d", vdb, "--empty-password"])
+        noise, empty = os.path.join(work, "noise"), os.path.join(work, "empty")
+        open(empty, "w").close()  # the NSS databases have an empty password; passing it avoids a prompt
+        payload = os.path.join(work, "payload.txt")
+        with open(payload, "w") as f:
+            f.write("origin release-keys self-check\n")
+        run([HOST_MAR, "-H", "release", "-V", "1.0", "-C", work, "-c", "test.mar", "payload.txt"])
+        secrets_out = {}
+        os.makedirs(DER_DIR, exist_ok=True)
+        for (k, der, cn), kc in zip(KEYS, kcs):
+            nick = "origin-mar-" + k
+            with open(noise, "wb") as f:
+                f.write(os.urandom(2048))
+            # ponytail: validity of 100 years (-v 1200 months, unverified that certutil accepts it); the
+            # updater reads only the public key, so dates do not matter there.
+            run([certutil, "-S", "-d", db, "-n", nick, "-s", "CN=" + cn, "-x", "-t", ",,u", "-k", "rsa", "-g", "4096",
+                 "-Z", "SHA384", "-v", "1200", "-z", noise, "-f", empty, "--keyUsage", "digitalSignature,certSigning"])
+            cert = run([certutil, "-L", "-d", db, "-n", nick, "-r"]).stdout
+            # Self-check: sign with the private key, verify against the public DER alone.
+            signed = os.path.join(work, "test-%s.mar" % k)
+            run([signmar, "-d", db, "-n", nick, "-s", os.path.join(work, "test.mar"), signed])
+            der_tmp = os.path.join(work, der)
+            with open(der_tmp, "wb") as f:
+                f.write(cert)
+            run([certutil, "-A", "-d", vdb, "-n", nick, "-t", ",,", "-i", der_tmp])
+            run([signmar, "-d", vdb, "-n", nick, "-v", signed])
+            pwfile, p12 = os.path.join(work, "p12pw-" + k), os.path.join(work, k + ".p12")
+            p12pw = secrets.token_hex(32)
+            with open(pwfile, "w") as f:
+                f.write(p12pw)
+            run([pk12util, "-o", p12, "-n", nick, "-d", db, "-k", empty, "-w", pwfile])
+            with open(p12, "rb") as f:
+                secrets_out[k] = (base64.b64encode(f.read()).decode(), p12pw, cert)
+            os.remove(p12); os.remove(pwfile)
+            print("generated key %s and verified a test MAR against its certificate" % k.upper())
+
+        for (k, der, _), kc in zip(KEYS, kcs):
+            if kc not in opened:
+                open_keychain(kc, opened)
+            b64, p12pw, cert = secrets_out[k]
+            put_parts(SERVICE % k, b64, kc)
+            security_stdin("add-generic-password -a release -s %s.p12-password -T /usr/bin/security -w %s %s"
+                           % (SERVICE % k, p12pw, kc))
+            # Read it back: a cut-off value would only show up at the first release otherwise.
+            if get_parts(SERVICE % k, kc) != b64 or read_item(SERVICE % k + ".p12-password", kc).decode() != p12pw:
+                sys.exit("key %s read back from %s does not match; delete its items and rerun" % (k.upper(), kc))
+            with open(os.path.join(DER_DIR, der), "wb") as f:
+                f.write(cert)
+            os.chmod(os.path.join(DER_DIR, der), 0o644)
+            print("stored key %s in %s, certificate in %s" % (k.upper(), kc, os.path.join(DER_DIR, der)))
+        secrets_out.clear()
+    finally:
+        # ponytail: plain rmtree on the SSD, the key was on disk in mode-700 files for seconds; use a RAM
+        # disk (hdiutil attach -nomount ram://) if that is not enough.
+        shutil.rmtree(work, ignore_errors=True)
+        for kc in opened:
+            subprocess.run(["/usr/bin/security", "lock-keychain", kc], capture_output=True)
+    print("done. Next: commit configs/updater/*.der, then decide where key B lives (ask the user before it leaves this Mac).")
+
+
+if __name__ == "__main__":
+    main()
