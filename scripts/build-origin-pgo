@@ -1,0 +1,131 @@
+#!/bin/sh
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+# Builds Origin with thin LTO and PGO in the three stages of Zen's CI (build.yml mac-step-1 to 3),
+# natively on this Mac. Recipe and sources: docs/research/pgo-lto-2026-10-13.md.
+#   1. Instrumented build: scripts/build-origin (engine reset, import, locales, build) plus
+#      ./mach package, which stages the app in the object dir and leaves dist/ alone.
+#   2. Profiling run: profileserver.py with the JetStream3 corpus in the logged-in GUI session.
+#      merged.profdata and en-US.log go to ~/artifact, where configs/macos/mozconfig reads them.
+#   3. Final build with thin LTO and the profile, then npm run package. The DMG lands in dist/
+#      and the app in engine/obj-aarch64-apple-darwin/dist, as with scripts/build-zen.
+# Start it detached through the measurement hold, which also keeps batches off the screen
+# during the profiling run:
+#   scripts/detach build-pgo scripts/perf/hold scripts/build-origin-pgo [2|3]
+# The optional argument starts at stage 2 or 3, for example to retry a failed LTO link with the
+# profile that is already in ~/artifact.
+# Estimates from the notes, all unverified: about 2 to 2.5 hours in total (stage 1 30 to 40 min,
+# stage 2 about 15 min, stage 3 1 to 1.5 hours). Peak memory 14 to 15 GB with swap in the compile
+# phases, 6 to 12 GB for the libxul link. Object dir 6 to 8 GB in stage 1 and 8 to 11 GB in
+# stage 3, .profraw files from a few hundred MB to a few GB, 194 MB corpus download.
+# Stats per stage: ../Zen-Origin-research/logs/build-stats/<time>-pgo-*/.
+set -eu
+cd "$(dirname "$0")/.."
+
+# ponytail: 4 ThinLTO backend jobs keep the libxul link at an estimated 6 to 12 GB of 16 GB but
+# make it slower; drop to 2 if mem.tsv shows over 5 GB swap during the link, raise towards 10
+# once a run peaks well under 16 GB.
+THINLTO_JOBS=4
+MAKE_JOBS=8   # mach build -j for stage 3; the notes keep the LTO compile below the default 10
+
+root="$PWD"
+research="$(cd .. && pwd)/Zen-Origin-research"
+obj="$root/engine/obj-aarch64-apple-darwin"
+bin="$(sed -n 's/^ *"binaryName": *"\([^"]*\)".*/\1/p' surfer.json)"
+app="$obj/dist/$bin/Origin.app"   # staged package: dist/<MOZ_APP_NAME>/<bundle>.app
+profdata_tool="$HOME/.mozbuild/clang/bin/llvm-profdata"
+corpus="$research/downloads/pgo-extended-corpus"
+artifact="$HOME/artifact"         # fixed by configs/macos/mozconfig:45-46
+lto_cache="$HOME/.cache/origin-lto"
+from="${1:-1}"
+
+die() { echo "build-origin-pgo: $*" >&2; exit 1; }
+free_gb() { df -k /System/Volumes/Data | awk 'NR == 2 { print int($4 / 1048576) }'; }
+gui() { sudo -n launchctl asuser 502 sudo -n -u mrm "$@"; }
+
+case "$from" in 1|2|3) ;; *) die "usage: build-origin-pgo [2|3] (start stage, default 1)" ;; esac
+
+# Every override for this build goes through the environment, as build-zen VAR=value arguments.
+# Nothing is written to ./mozconfig, so normal builds never see these flags and there is nothing
+# to clean up after a kill. A ./mozconfig that already exists would leak into this build.
+[ ! -e mozconfig ] || die "remove ./mozconfig first: surfer appends it to every build"
+[ "$(free_gb)" -ge 45 ] || die "under 45 GB free on /System/Volumes/Data"
+
+if [ "$from" -le 2 ]; then
+  [ -x "$profdata_tool" ] || die "no llvm-profdata at $profdata_tool, run mach bootstrap"
+  [ "$(stat -f %Su /dev/console)" = mrm ] || die "mrm is not logged in at the console; the profiling run needs a GUI session"
+  gui /usr/bin/true || die "cannot start commands in mrm's GUI session with sudo -n launchctl asuser 502"
+  if [ ! -d "$corpus/JetStream" ]; then
+    # Same URL and checksum as scripts/download_pgo_extended_corpus.py, read without pyyaml.
+    yml=engine/taskcluster/kinds/fetch/benchmarks.yml
+    url="$(awk '/^pgo-extended-corpus:/ { f = 1 } f && $1 == "url:" { print $2; exit }' "$yml")"
+    sha="$(awk '/^pgo-extended-corpus:/ { f = 1 } f && $1 == "sha256:" { print $2; exit }' "$yml")"
+    [ -n "$url" ] && [ -n "$sha" ] || die "no pgo-extended-corpus entry in $yml"
+    echo "downloading the JetStream3 corpus, 194 MB: $url"
+    mkdir -p "$research/downloads"
+    tmp="$(mktemp -d "$research/downloads/pgo-corpus.XXXXXX")"
+    curl -fL --retry 3 -o "$tmp/corpus.tar.gz" "$url" || die "corpus download failed, $corpus is missing"
+    echo "$sha  $tmp/corpus.tar.gz" | shasum -a 256 -c - || die "corpus checksum mismatch, see $tmp"
+    mkdir "$tmp/JetStream"
+    tar -xzf "$tmp/corpus.tar.gz" -C "$tmp/JetStream" --strip-components 1
+    rm "$tmp/corpus.tar.gz"
+    mv "$tmp" "$corpus"
+    echo "corpus unpacked: $(du -sh "$corpus" | cut -f1) in $corpus"
+  fi
+fi
+if [ "$from" -eq 2 ]; then
+  [ -x "$app/Contents/MacOS/$bin" ] || die "no instrumented app at $app, start at stage 1"
+fi
+if [ "$from" -eq 3 ]; then
+  [ -s "$artifact/merged.profdata" ] && [ -s "$artifact/en-US.log" ] || die "no profile in $artifact, start at stage 1"
+fi
+
+if [ "$from" -le 1 ]; then
+  echo "=== stage 1 of 3: instrumented build $(date +%T)"
+  # ZEN_DISABLE_LTO stays 1 from env.sh; profile-generate turns LTO off anyway.
+  scripts/build-origin --label pgo-1-instrumented ZEN_GA_DISABLE_PGO= ZEN_GA_GENERATE_PROFILE=1 \
+    import locales build stage || die "stage 1 failed"
+  [ -x "$app/Contents/MacOS/$bin" ] || die "stage 1 left no staged app at $app"
+fi
+
+if [ "$from" -le 2 ]; then
+  echo "=== stage 2 of 3: profiling run in the GUI session $(date +%T)"
+  [ "$(free_gb)" -ge 45 ] || die "under 45 GB free before the profiling run"
+  for port in 8000 8001; do
+    ! lsof -nP -iTCP:$port -sTCP:LISTEN >/dev/null 2>&1 || die "port $port is taken; profileserver.py needs it"
+  done
+  # CI ad-hoc signs the instrumented app too (macos-profile-build.yml:85).
+  codesign --force --deep --sign - "$app" || true
+  start=$(date +%s)
+  # sudo drops the environment, so HOME is passed on and the shell inside sets up the rest. The stage 1 variables
+  # make mach read the same mozconfig as the instrumented build.
+  gui /usr/bin/env HOME="$HOME" /bin/zsh -c '. "$1/scripts/env.sh" && cd "$1/engine" &&
+    export ZEN_GA_GENERATE_PROFILE=1 LLVM_PROFDATA="$2" JARLOG_FILE=en-US.log && unset ZEN_GA_DISABLE_PGO &&
+    exec ./mach python build/pgo/profileserver.py --binary "$3" --extended-corpus "$4"' \
+    zsh "$root" "$profdata_tool" "$app/Contents/MacOS/$bin" "$corpus" || die "profiling run failed, see the log above"
+  end=$(date +%s)
+  [ -s engine/merged.profdata ] && [ -s engine/en-US.log ] || die "profiling run left no merged.profdata or en-US.log in engine/"
+  stats="$research/logs/build-stats/$(date +%Y-%m-%d-%H%M%S)-pgo-2-profile"
+  mkdir -p "$stats"
+  printf 'phase\tstart\tend\tseconds\tprofraw_kb\tprofdata_kb\tfree_gb\nprofile\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$start" "$end" $((end - start)) "$(du -ck engine/*.profraw | tail -n 1 | cut -f1)" \
+    "$(du -k engine/merged.profdata | cut -f1)" "$(free_gb)" > "$stats/phases.tsv"
+  cat "$stats/phases.tsv"
+  mkdir -p "$artifact"
+  mv engine/merged.profdata engine/en-US.log "$artifact/"
+  rm -f engine/*.profraw
+fi
+
+echo "=== stage 3 of 3: thin LTO build with the profile $(date +%T)"
+mkdir -p "$lto_cache"
+# ZEN_DISABLE_LTO and ZEN_GA_DISABLE_PGO unset: configs/common/mozconfig turns on
+# --enable-lto=cross,thin and configs/macos/mozconfig --enable-profile-use=cross with ~/artifact.
+# The profile stays in ~/artifact, so a configure rerun inside mach package still finds it.
+scripts/build-zen --label pgo-3-final --jobs "$MAKE_JOBS" \
+  ZEN_DISABLE_LTO= ZEN_GA_DISABLE_PGO= ZEN_GA_GENERATE_PROFILE= \
+  "LDFLAGS=-Wl,--thinlto-jobs=$THINLTO_JOBS -Wl,-cache_path_lto,$lto_cache -Wl,--thinlto-cache-policy=cache_size_bytes=10g" \
+  build package || die "stage 3 failed"
+echo "=== done $(date +%T)"
+ls -l dist/*.dmg

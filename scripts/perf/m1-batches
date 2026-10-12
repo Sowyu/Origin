@@ -6,8 +6,10 @@
 # The measurements in one unattended chain, most important first:
 # 1. baseline-1: every scenario, 3 runs, official Zen, stock Zen, Firefox, Safari and a
 #    no-browser floor.
-# 2. origin-1: Origin on every scenario, interleaved with Origin with every Zen effect off
-#    (min-visual) where effects can cost something, plus the no-browser floor again for drift.
+# 2. origin-1: Origin on every scenario. Where something moves, stock Zen runs interleaved as a
+#    control, and so does Origin with every Zen effect off (min-visual), so the comparison is safe
+#    from drift and from other apps on the Mac (T3 Code's service shows up in whole-Mac power).
+#    The no-browser floor runs again for drift in the scenarios where nothing moves.
 # 3. memory-1: idle with only the selected tab loaded (on-demand), with and without spare
 #    processes (lean-memory; Origin has those prefs built in), and Origin's tab unloader set to
 #    one minute (unload-1min).
@@ -30,7 +32,7 @@ run() { "$here/run" --settle "$SETTLE" "$@" || echo "step failed: $*"; }
 
 run --batch baseline-1 --browsers "none,$BROWSERS,safari" --scenarios all --runs 3
 
-run --batch origin-1 --browsers origin,origin+min-visual --scenarios "$ACTIVE" --runs 3
+run --batch origin-1 --browsers zen-stock,origin,origin+min-visual --scenarios "$ACTIVE" --runs 3
 run --batch origin-1 --browsers none,origin --scenarios all --runs 3
 
 run --batch memory-1 --browsers firefox+on-demand,firefox+lean-memory,zen-stock+on-demand,zen-stock+lean-memory,origin+on-demand,origin+unload-1min --scenarios idle --runs 3

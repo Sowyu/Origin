@@ -4,10 +4,13 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """Builds Zen from this tree and records wall time, peak memory and disk use per phase.
 
-Usage: scripts/detach build scripts/build-zen [phase ...]
+Usage: scripts/detach build scripts/build-zen [--label NAME] [--jobs N] [VAR=value ...] [phase ...]
 Phases, in order: download import bootstrap locales build package (default: all of them).
-download is skipped when engine/ already holds a Firefox tree.
-Toolchains and options come from scripts/env.sh (release options, no LTO, no PGO).
+download is skipped when engine/ already holds a Firefox tree. stage is an extra phase, never run by
+default: plain ./mach package, which stages the app in the object dir without copying it into dist/.
+Toolchains and options come from scripts/env.sh (release options, no LTO, no PGO). VAR=value
+overrides one variable for every phase of this run only, and VAR= unsets it. --jobs N passes -j N
+to mach build. --label NAME is appended to the stats folder name.
 Stats go to ../Zen-Origin-research/logs/build-stats/<run>/: phases.tsv, mem.tsv, disk.tsv, summary.txt.
 """
 import os, subprocess, sys, threading, time
@@ -24,6 +27,7 @@ COMMANDS = {
     "locales": ["python3", "scripts/update_en_US_packs.py"],
     "build": ["npm", "run", "build"],
     "package": ["npm", "run", "package"],
+    "stage": ["./mach", "package"],
 }
 
 def env():
@@ -87,14 +91,36 @@ def watch(stop, path):
             stop.wait(5)
 
 def main():
-    phases = sys.argv[1:] or ALL
+    args, label, jobs, overrides = sys.argv[1:], "", None, {}
+    while args and (args[0].startswith("-") or "=" in args[0]):
+        a = args.pop(0)
+        if a in ("--label", "--jobs") and args:
+            v = args.pop(0)
+            if a == "--label":
+                label = "-" + v
+            else:
+                jobs = v
+        elif "=" in a and not a.startswith("-"):
+            k, v = a.split("=", 1)
+            overrides[k] = v
+        else:
+            sys.exit(f"bad option {a}; usage: build-zen [--label NAME] [--jobs N] [VAR=value ...] [phase ...]")
+    phases = args or ALL
     bad = [p for p in phases if p not in COMMANDS]
     if bad:
-        sys.exit(f"unknown phase {bad}; phases: {' '.join(ALL)}")
-    run = time.strftime("%Y-%m-%d-%H%M%S")
+        sys.exit(f"unknown phase {bad}; phases: {' '.join(ALL)} stage")
+    run = time.strftime("%Y-%m-%d-%H%M%S") + label
     stats = os.path.join(RESEARCH, "logs", "build-stats", run)
     os.makedirs(stats)
     e = env()
+    for k, v in overrides.items():
+        if v:
+            e[k] = v
+        else:
+            e.pop(k, None)
+    options = " ".join([f"--jobs {jobs}"] * bool(jobs) + [f"{k}={v}" for k, v in overrides.items()])
+    if options:
+        print(f"=== options: {options}", flush=True)
     stop = threading.Event()
     threading.Thread(target=watch, args=(stop, os.path.join(stats, "mem.tsv")), daemon=True).start()
     disk = open(os.path.join(stats, "disk.tsv"), "w")
@@ -116,10 +142,11 @@ def main():
         if phase == "download" and os.path.exists(os.path.join(ENGINE, "toolkit", "moz.build")):
             print("=== download: engine/ already holds Firefox, skipped", flush=True)
             continue
-        cwd = ENGINE if phase == "bootstrap" else ROOT
-        print(f"=== {phase}: {' '.join(COMMANDS[phase])} (cwd {cwd})", flush=True)
+        cwd = ENGINE if phase in ("bootstrap", "stage") else ROOT
+        cmd = COMMANDS[phase] + (["--", "--jobs", jobs] if phase == "build" and jobs else [])
+        print(f"=== {phase}: {' '.join(cmd)} (cwd {cwd})", flush=True)
         start = time.time()
-        rc = subprocess.call(COMMANDS[phase], cwd=cwd, env=e)
+        rc = subprocess.call(cmd, cwd=cwd, env=e)
         end = time.time()
         tsv.write(f"{phase}\t{int(start)}\t{int(end)}\t{end - start:.0f}\t{rc}\n")
         tsv.flush()
@@ -132,6 +159,8 @@ def main():
     time.sleep(0.2)
     rows = [l.split("\t") for l in open(os.path.join(stats, "mem.tsv")).read().splitlines()[1:]]
     with open(os.path.join(stats, "summary.txt"), "w") as f:
+        if options:
+            f.write(f"options {options}\n")
         if rows:
             f.write(f"peak build tree RSS {max(int(r[1]) for r in rows)} MB\n")
             f.write(f"peak system used {max(int(r[2]) for r in rows)} MB of 16384\n")

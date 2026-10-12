@@ -29,4 +29,6 @@ for f in out:
 print(f"removed {len(out)} files that patches add")
 PY
 echo "dangling symlinks removed: $(find engine/zen engine/browser -type l ! -exec test -e {} \; -print -delete | wc -l | tr -d ' ')"
-exec scripts/build-zen import locales build package
+# Arguments go to build-zen as they are (options, then phases). Without any it runs the usual chain.
+[ $# -gt 0 ] || set -- import locales build package
+exec scripts/build-zen "$@"
