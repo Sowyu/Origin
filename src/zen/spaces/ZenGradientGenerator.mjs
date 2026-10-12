@@ -92,6 +92,7 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
   #sinePoints = parseSinePath(this.#sinePath);
 
   #colorPage = 0;
+  #uiReady = null;
   #gradientsCache = new Map();
   #nativeAccentColorCache = null;
 
@@ -131,31 +132,12 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
         .querySelector("path")
     );
 
-    this.panel.addEventListener(
-      "popupshowing",
-      this.handlePanelOpen.bind(this)
-    );
-    this.panel.addEventListener(
-      "popuphidden",
-      this.handlePanelClose.bind(this)
-    );
-    this.panel.addEventListener("command", this.handlePanelCommand.bind(this));
-
-    document
-      .getElementById("PanelUI-zen-gradient-generator-opacity")
-      .addEventListener("input", this.onOpacityChange.bind(this));
-
-    // Call the rest of the initialization
+    // Call the rest of the initialization. The panel UI waits for the first
+    // open, see #ensureUI().
     this.initContextMenu();
-    this.initPredefinedColors();
 
     this._resolveInitialized();
     delete this._resolveInitialized;
-
-    this.initCustomColorInput();
-    this.initTextureInput();
-    this.initSchemeButtons();
-    this.initColorPages();
 
     const darkModeChange = this.handleDarkModeChange.bind(this);
     window
@@ -218,11 +200,59 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
     document.getElementById("toolbar-context-customize").before(menu);
   }
 
-  openThemePicker(event) {
+  /**
+   * Wires the picker panel and loads its stylesheet on first open, so a
+   * window that never opens the picker skips both.
+   *
+   * @returns {Promise} Resolves once the stylesheet has loaded.
+   */
+  #ensureUI() {
+    if (this.#uiReady) {
+      return this.#uiReady;
+    }
+    this.panel.addEventListener(
+      "popupshowing",
+      this.handlePanelOpen.bind(this)
+    );
+    this.panel.addEventListener(
+      "popuphidden",
+      this.handlePanelClose.bind(this)
+    );
+    this.panel.addEventListener("command", this.handlePanelCommand.bind(this));
+
+    document
+      .getElementById("PanelUI-zen-gradient-generator-opacity")
+      .addEventListener("input", this.onOpacityChange.bind(this));
+
+    this.initPredefinedColors();
+    this.initCustomColorInput();
+    this.initTextureInput();
+    this.initSchemeButtons();
+    this.initColorPages();
+
+    const link = document.createElementNS(
+      "http://www.w3.org/1999/xhtml",
+      "link"
+    );
+    link.rel = "stylesheet";
+    link.href = "chrome://browser/content/zen-styles/zen-gradient-generator.css";
+    this.#uiReady = new Promise(resolve => {
+      link.addEventListener("load", resolve, { once: true });
+      link.addEventListener("error", resolve, { once: true });
+    });
+    // Same place in the cascade as the link zen-assets.inc.xhtml used to have.
+    document
+      .querySelector('link[href$="/zen-styles/zen-panel-ui.css"]')
+      .before(link);
+    return this.#uiReady;
+  }
+
+  async openThemePicker(event) {
     const fromForm = event.explicitOriginalTarget?.classList?.contains(
       "zen-workspace-creation-edit-theme-button"
     );
     const isRightSide = window.gZenVerticalTabsManager._prefsRightSide;
+    await this.#ensureUI();
     PanelMultiView.openPopup(this.panel, this.toolbox, {
       position: isRightSide ? "topleft topright" : "topright topleft",
       triggerEvent: event,
@@ -1694,8 +1724,8 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
         browser.windowUtils.getBoundsWithoutFlushing(
           textureSelectWrapper
         ).width;
-      // Dont show when hidden
-      if (textureWrapperWidth) {
+      // Dont show when hidden, or before the picker UI exists.
+      if (textureWrapperWidth && browser.gZenThemePicker._textureHandler) {
         // rotate and trasnform relative to the wrapper width depending on the texture value
         let textureValue = this.currentTexture;
         let textureHandler = browser.gZenThemePicker._textureHandler;
@@ -1941,7 +1971,8 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
    * @param {Element} anchor - Element to anchor the panel to
    * @param {Event} event - The triggering event
    */
-  openThemePickerForWorkspace(workspace, anchor, event) {
+  async openThemePickerForWorkspace(workspace, anchor, event) {
+    await this.#ensureUI();
     this.#editingWorkspaceId = workspace.uuid;
     this.onWorkspaceChange(workspace);
     this.panel.removeAttribute("hidepopovertail");

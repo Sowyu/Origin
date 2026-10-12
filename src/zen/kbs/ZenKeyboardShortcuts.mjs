@@ -1345,12 +1345,23 @@ window.gZenKeyboardShortcutsManager = {
   async init() {
     if (this.inBrowserView) {
       const loadedShortcuts = await this._loadSaved();
+      // fixedKeyboardShortcuts() pushes defaults into the loaded array, so
+      // keep a copy to tell whether it added or dropped anything.
+      const loadedCopy = loadedShortcuts?.slice();
+      const wasUpToDate = this.versioner.isVersionUpToDate();
 
       this._currentShortcutList =
         this.versioner.fixedKeyboardShortcuts(loadedShortcuts);
-      this._applyShortcuts();
+      // Other windows already have their keysets, only build this one.
+      this._applyShortcuts([window]);
 
-      await this._saveShortcuts();
+      const unchanged =
+        wasUpToDate &&
+        loadedCopy?.length === this._currentShortcutList.length &&
+        loadedCopy.every((s, i) => s === this._currentShortcutList[i]);
+      if (!unchanged) {
+        await this._saveShortcuts();
+      }
       window.dispatchEvent(
         new Event("ZenKeyboardShortcutsReady", { bubbles: true })
       );
@@ -1462,8 +1473,8 @@ window.gZenKeyboardShortcutsManager = {
     this.triggerShortcutRebuild();
   },
 
-  _applyShortcuts() {
-    for (const browser of nsZenMultiWindowFeature.browsers) {
+  _applyShortcuts(browsers = nsZenMultiWindowFeature.browsers) {
+    for (const browser of browsers) {
       let mainKeyset = browser.document.getElementById(ZEN_MAIN_KEYSET_ID);
       if (!mainKeyset) {
         throw new Error("Main keyset not found");

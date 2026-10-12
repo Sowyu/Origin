@@ -212,13 +212,20 @@ window.gZenUIManager = {
   },
 
   _initOmnibox() {
-    const { registerZenUrlbarProviders } = ChromeUtils.importESModule(
-      "resource:///modules/ZenUBProvider.sys.mjs"
-    );
     const { nsZenSiteDataPanel: ZenSiteDataPanel } = ChromeUtils.importESModule(
       "resource:///modules/ZenSiteDataPanel.sys.mjs"
     );
-    registerZenUrlbarProviders();
+    // Every urlbar query in this window goes through gURLBar.startQuery, so
+    // register the providers right before the first one instead of at startup.
+    // Deleting the own property restores the prototype method.
+    gURLBar.startQuery = function (...args) {
+      delete this.startQuery;
+      const { registerZenUrlbarProviders } = ChromeUtils.importESModule(
+        "resource:///modules/ZenUBProvider.sys.mjs"
+      );
+      registerZenUrlbarProviders();
+      return this.startQuery(...args);
+    };
     window.gZenSiteDataPanel = new ZenSiteDataPanel(window);
     gURLBar._zenTrimURL = this.urlbarTrim.bind(this);
   },
@@ -1059,7 +1066,6 @@ window.gZenVerticalTabsManager = {
   _canAnimateItemOpen(aItem) {
     return !(
       gReduceMotion ||
-      !gZenUIManager.motion ||
       !aItem ||
       !gZenUIManager._hasLoadedDOM ||
       !aItem.isConnected ||
@@ -1068,7 +1074,9 @@ window.gZenVerticalTabsManager = {
       (gZenUIManager.testingEnabled && !gZenUIManager.profilingEnabled) ||
       !gZenStartup.isReady ||
       aItem.group?.hasAttribute("split-view-group") ||
-      window.gZenViewSplitter?.waitingForSplitTab
+      window.gZenViewSplitter?.waitingForSplitTab ||
+      // Last, so windows that never animate never load Motion.
+      !gZenUIManager.motion
     );
   },
 
@@ -1161,8 +1169,8 @@ window.gZenVerticalTabsManager = {
     if (
       aItem.hasAttribute("zen-essential") ||
       aItem.group?.hasAttribute("split-view-group") ||
-      !gZenUIManager.motion ||
-      gReduceMotion
+      gReduceMotion ||
+      !gZenUIManager.motion
     ) {
       return Promise.resolve();
     }
