@@ -2,6 +2,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+# Origin: the picker stays in a template until its first open, see
+# nsZenThemePicker's #ensureUI().
+<html:template id="template-PanelUI-zen-gradient-generator">
 <panel flip="side" type="arrow"
     opupalign="center" 
     orient="vertical" 
@@ -160,3 +163,4 @@
     </panelview>
   </panelmultiview>
 </panel>
+</html:template>

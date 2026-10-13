@@ -205,7 +205,8 @@ await sleep(300);
 return { collapsed: f.collapsed };""", ())]),
 
     ("theme-picker", True, [("open", """
-const panel = byId("PanelUI-zen-gradient-generator");
+// The panel stays in a template until the first open; this getter returns the node either way.
+const panel = gZenThemePicker.panel;
 const shown = onPopup(panel, "popupshown");
 byId("cmd_zenOpenZenThemePicker").doCommand();
 await shown;

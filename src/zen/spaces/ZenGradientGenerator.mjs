@@ -45,15 +45,26 @@ function parseSinePath(pathStr) {
 
 const lazy = {};
 
+// The picker panel stays in its template until the first open, so look there
+// too. Nodes keep their identity when the template content moves in.
+function getPickerElement(id) {
+  return (
+    document.getElementById(id) ??
+    document
+      .getElementById("template-PanelUI-zen-gradient-generator")
+      ?.content.getElementById(id)
+  );
+}
+
 ChromeUtils.defineLazyGetter(lazy, "MAX_OPACITY", () => {
   return parseFloat(
-    document.getElementById("PanelUI-zen-gradient-generator-opacity").max
+    getPickerElement("PanelUI-zen-gradient-generator-opacity").max
   );
 });
 
 ChromeUtils.defineLazyGetter(lazy, "MIN_OPACITY", () => {
   return parseFloat(
-    document.getElementById("PanelUI-zen-gradient-generator-opacity").min
+    getPickerElement("PanelUI-zen-gradient-generator-opacity").min
   );
 });
 
@@ -114,22 +125,22 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
       Services.prefs.getIntPref("zen.theme.gradient-legacy-version", 1) === 0;
 
     ChromeUtils.defineLazyGetter(this, "panel", () =>
-      document.getElementById("PanelUI-zen-gradient-generator")
+      getPickerElement("PanelUI-zen-gradient-generator")
     );
     ChromeUtils.defineLazyGetter(this, "toolbox", () =>
       document.getElementById("TabsToolbar")
     );
     ChromeUtils.defineLazyGetter(this, "customColorInput", () =>
-      document.getElementById("PanelUI-zen-gradient-generator-custom-input")
+      getPickerElement("PanelUI-zen-gradient-generator-custom-input")
     );
     ChromeUtils.defineLazyGetter(this, "customColorList", () =>
-      document.getElementById("PanelUI-zen-gradient-generator-custom-list")
+      getPickerElement("PanelUI-zen-gradient-generator-custom-list")
     );
 
     ChromeUtils.defineLazyGetter(this, "sliderWavePath", () =>
-      document
-        .getElementById("PanelUI-zen-gradient-slider-wave")
-        .querySelector("path")
+      getPickerElement("PanelUI-zen-gradient-slider-wave").querySelector(
+        "path"
+      )
     );
 
     // Call the rest of the initialization. The panel UI waits for the first
@@ -201,15 +212,29 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
   }
 
   /**
-   * Wires the picker panel and loads its stylesheet on first open, so a
-   * window that never opens the picker skips both.
+   * True once this window's picker panel is in the document, see #ensureUI().
+   * Other windows read it, so it can't be a private field.
+   */
+  get hasPanelUI() {
+    return !!this.#uiReady;
+  }
+
+  /**
+   * Moves the picker panel out of its template, wires it and loads its
+   * stylesheet on first open, so a window that never opens the picker skips
+   * all three.
    *
-   * @returns {Promise} Resolves once the stylesheet has loaded.
+   * @returns {Promise} Resolves once the stylesheet and the labels are in.
    */
   #ensureUI() {
     if (this.#uiReady) {
       return this.#uiReady;
     }
+    const template = document.getElementById(
+      "template-PanelUI-zen-gradient-generator"
+    );
+    template?.replaceWith(template.content);
+
     this.panel.addEventListener(
       "popupshowing",
       this.handlePanelOpen.bind(this)
@@ -236,10 +261,13 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
     );
     link.rel = "stylesheet";
     link.href = "chrome://browser/content/zen-styles/zen-gradient-generator.css";
-    this.#uiReady = new Promise(resolve => {
-      link.addEventListener("load", resolve, { once: true });
-      link.addEventListener("error", resolve, { once: true });
-    });
+    this.#uiReady = Promise.all([
+      new Promise(resolve => {
+        link.addEventListener("load", resolve, { once: true });
+        link.addEventListener("error", resolve, { once: true });
+      }),
+      document.l10n.translateFragment(this.panel),
+    ]);
     // Same place in the cascade as the link zen-assets.inc.xhtml used to have.
     document
       .querySelector('link[href$="/zen-styles/zen-panel-ui.css"]')
@@ -1589,9 +1617,11 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
 
       // Nobody sees the panel's dots, wave, texture and buttons while it is
       // closed, so leave them stale and let handlePanelOpen rebuild them.
+      // A panel still in its template has no UI to update at all.
       const updatePanelUI =
-        browser.gZenThemePicker.panel.state !== "closed" ||
-        !!browser.gZenThemePicker.editingWorkspaceId;
+        browser.gZenThemePicker.hasPanelUI &&
+        (browser.gZenThemePicker.panel.state !== "closed" ||
+          !!browser.gZenThemePicker.editingWorkspaceId);
       browser.gZenThemePicker._panelUIStale = !updatePanelUI;
 
       if (!skipUpdate && updatePanelUI) {
@@ -1658,7 +1688,8 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
         let opacity = browser.gZenThemePicker.currentOpacity;
         const svg = browser.gZenThemePicker.sliderWavePath;
         /* eslint-disable no-unused-vars */
-        const [_, secondStop, thirdStop] = document.querySelectorAll(
+        // The other window's stops: this window may have no picker UI yet.
+        const [_, secondStop, thirdStop] = browser.document.querySelectorAll(
           "#PanelUI-zen-gradient-generator-slider-wave-gradient stop"
         );
         // Opacity can only be between lazy.MIN_OPACITY to lazy.MAX_OPACITY. Make opacity relative to that range

@@ -46,7 +46,8 @@ run --batch profiler-1 --browsers "$BROWSERS,origin" --scenarios idle,minimized 
 /usr/bin/python3 - "$here/variants.json" > /tmp/zo-effects-plan.txt <<'PY'
 import json, sys
 SKIP = {"idle", "launch"}
-v = {k: d for k, d in json.load(open(sys.argv[1])).items() if not k.startswith("_")}
+# origin_only variants need Origin's patches, so they mean nothing on stock Zen.
+v = {k: d for k, d in json.load(open(sys.argv[1])).items() if not k.startswith("_") and not d.get("origin_only")}
 scenarios = []
 for d in v.values():
     scenarios += [s for s in d["scenarios"] if s not in scenarios and s not in SKIP]

@@ -72,6 +72,7 @@ Smallest fixes from `docs/research/zen-hot-paths-2026-10-13.md`, not measured ye
 - URL bar actions keep their Fluent labels until the app locale changes, instead of formatting about 40 strings on every keystroke.
 - `zen.session-store.log` is off, so a session save no longer logs a console line.
 - Tab label and icon changes reach the pinned tab manager and window sync only when the label or icon really changed.
+- The theme picker's panel (`theme-picker.inc`, 85 elements) stays in an `html:template` until its first open, the way Firefox loads its identity and extensions panels. Space gradients still paint at startup.
 
 ## Kept after review
 
@@ -84,6 +85,8 @@ Smallest fixes from `docs/research/zen-hot-paths-2026-10-13.md`, not measured ye
 - Memory trim (same file): after 10 minutes without input or with another app in front, one memory-pressure notification drops WebRender's and the pages' caches (`origin.memory.trim-after-idle-minutes`, 0 turns it off). It skips while media plays or a call runs. Back then reloads pages instead of using the back-forward cache.
 - Translations' language detector (`src/toolkit/components/translations/LanguageDetector-sys-mjs.patch`): its worker stops after a minute without page loads instead of living for the session. The user's report showed it at 17.5 MB.
 - Animation speed (`prefs/origin/ui.yaml`, `origin.ui.animation-speed-percent`): the UI's transitions and animations run 2.5 times as fast as Zen's, at the user's request. 100 is Zen's speed.
+- Corner-only page masks (`src/gfx/layers/NativeLayerCA-mm.patch`, `zen.widget.macos.round-corner-tiles-only` in `prefs/origin/compositor.yaml`): only compositor tiles that reach into a corner of the rounded page get the rounded mask, so the rest stay plain opaque layers. Off by default until the harness measures it.
+- Material hole under the page (`src/widget/cocoa/nsCocoaWindow-mm.patch`, `zen.widget.macos.window-material-hole` in `prefs/origin/widget.yaml`): the window's blur is masked away under the opaque page, 16 points inside its edges, so the window server stops blending it under every scroll and video frame. Off by default until the harness measures it.
 - Memory prefs (`prefs/origin/memory.yaml`): no spare content processes and no preloaded new tab page.
 - Background prefs (`prefs/origin/background.yaml`): no Nimbus rollouts and no captive portal check, because macOS shows its own Wi-Fi login sheet.
 - Startup helpers cut from `BrowserComponents.manifest`: Firefox's IP Protection, link preview and content relevancy no longer start at launch, and their prefs (`browser.ipProtection.enabled`, `browser.ml.linkPreview.enabled`) are locked off in `prefs/origin/startup.yaml` and `prefs/firefox/ai.yaml`.
