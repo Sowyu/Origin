@@ -9,8 +9,9 @@ Milestone 2, the debloat, started 2026-10-13 at 00:10 on the user's word (see De
 Next action (pre-release 1.23.2b-origin.5 is out since 2026-10-13 18:48 CEST: https://github.com/Sowyu/Origin/releases/tag/1.23.2b-origin.5, build `builds/origin-release-5`, browser `origin-release-5`. Pre-release 4 plus idle tile buffers, a surface pool of 4, loops at their own pace and the lazy theme picker; fixes A and B are compiled in and off):
 1. Wait for the user's verdict on pre-release 5 (it carries pre-release 3's changes): animations (tab open and close slide, space switch, compact mode, split view drop), Translations, the blank new tab, and Activity Monitor after 10 minutes in the background (the memory trim).
 2. GPU memory (`docs/research/gpu-memory-retina-2026-10-13.md`): about 200 to 340 MB of the user's GPU process has no reporter. Ask for `footprint -p <GPU pid>` (or `vmmap --summary`) from their MacBook to see whether it is Apple's GL driver. Pool size (`gfx.webrender.compositor.surface-pool-size`) and spare tile buffers are the next memory levers; both cost energy, so they need numbers.
-3. Window material (`docs/research/window-material-2026-10-13.md`): fix A or B waits for the no-vibrancy, no-page-radius and vibrancy-and-radius-off variants on scroll and video-windowed. Tests are off until the user says otherwise (2026-10-13 07:10); ask before a batch, since it needs the screen for about two hours.
-4. Deferred hot paths (`docs/research/zen-hot-paths-2026-10-13.md`): 3 (about:blank browsers kept by window sync), 8 (spaces sync hashing), 9 (search mode glow), 12 (compact mode hover), 15 (notification box transition).
+3. The user may try `gfx.display.max-frame-rate` 60 on their 120 Hz MacBook; this Mac's screen is 60 Hz, so the harness can't measure it.
+4. First paint needs a re-run once the CandyWrapper crash dialog is gone from the screen (launch-2 lost every first paint to it).
+5. Deferred hot paths (`docs/research/zen-hot-paths-2026-10-13.md`): 3 (about:blank browsers kept by window sync), 8 (spaces sync hashing), 9 (search mode glow), 12 (compact mode hover), 15 (notification box transition).
 
 ## Milestones
 
