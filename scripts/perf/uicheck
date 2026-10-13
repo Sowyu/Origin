@@ -25,8 +25,9 @@ import zo
 
 LOADED = "return [...gBrowser.tabs].every(t => !t.hasAttribute('busy') && !t.hasAttribute('pending'));"
 
-# Prepended to every step script. Pointer events go through windowUtils.sendMouseEvent, the call
-# EventUtils.synthesizeMouseAtCenter makes in Zen's own tests (src/zen/tests/tabs/head.js).
+# Prepended to every step script. Context menus open through menupopup.openPopup(anchor, position,
+# 0, 0, true), the call Zen's own code makes (ZenSpace.mjs); windowUtils.sendMouseEvent does not exist
+# in Firefox 157 chrome windows.
 HELPERS = r"""
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const timeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) =>
@@ -48,10 +49,12 @@ const onPopup = (el, type, ms = 5000) => timeout(new Promise(res => {
   const h = e => { if (e.target === el) { el.removeEventListener(type, h); res(); } };
   el.addEventListener(type, h);
 }), ms, `${type} on #${el.id}`);
-const contextClick = el => {
+// Opens a context menu on el as a right click would. The menu may be a native macOS menu, so callers
+// wait for popupshown with a timeout.
+const openContext = (menu, el) => {
   const r = el.getBoundingClientRect();
   if (!r.width || !r.height) throw new Error(`${el.localName}.${el.className} has no size`);
-  window.windowUtils.sendMouseEvent("contextmenu", r.left + r.width / 2, r.top + r.height / 2, 2, 1, 0);
+  menu.openPopup(el, "after_start", 0, 0, true, false);
 };
 const webTabs = () => gBrowser.visibleTabs.filter(t => !t.pinned && !t.group &&
   !t.hasAttribute("zen-empty-tab") && !t.hasAttribute("zen-essential") &&
@@ -77,6 +80,9 @@ const setFolderCollapsed = async (f, collapsed) => {
   await done;
 };
 const openPrefs = async pane => {
+  // paneGeneral is not registered while browser.settings-redesign.enabled is on (preferences.js
+  // init_all); the first redesigned pane, Appearance, takes its place.
+  if (pane == "paneGeneral" && Services.prefs.getBoolPref("browser.settings-redesign.enabled", false)) pane = "paneAppearance";
   openPreferences(pane);
   const browser = await until(() => {
     const b = gBrowser.selectedBrowser;
@@ -85,15 +91,18 @@ const openPrefs = async pane => {
   }, 15000, "about:preferences to load");
   const win = browser.contentWindow, doc = browser.contentDocument;
   await win.gotoPref(pane);
-  const shown = await until(() => [...doc.querySelectorAll(`[data-category="${pane}"]`)].filter(e => !e.hidden).length,
-                            5000, `${pane} to show`);
+  await until(() => win.gLastCategory?.category == pane, 5000, `${pane} to be selected`);
+  const shown = await until(() => [...doc.querySelectorAll(`[data-category="${pane}"], setting-pane[name="${pane}"]`)]
+                              .filter(e => !e.hidden).length, 5000, `${pane} to show`);
   return { win, doc, shown };
 };
 """
 
 # Runs once: listens for console errors and saves the state the reset puts back.
 INSTALL = """
-const isError = m => m instanceof Ci.nsIScriptError && !(m.flags & Ci.nsIScriptError.warningFlag);
+// A step that timed out can still log from this sandbox later; that is the tool, not the browser.
+const isError = m => m instanceof Ci.nsIScriptError && !(m.flags & Ci.nsIScriptError.warningFlag) &&
+  !String(m.sourceName).includes("[System Principal]") && !String(m.errorMessage).includes("timed out after");
 const fmt = m => `${m.errorMessage} (${m.sourceName}:${m.lineNumber})`;
 const s = window.__uicheck = { errors: [], compact: window.gZenCompactModeManager?.preference,
   space: window.gZenWorkspaces?.activeWorkspace, tab: gBrowser.selectedTab,
@@ -205,12 +214,9 @@ return { dots: panel.querySelectorAll(".zen-theme-picker-dot").length };""", ())
 
     ("emoji-picker", True, [("open", """
 const panel = byId("PanelUI-zen-emojis-picker");
-const anchor = gZenWorkspaces.activeWorkspaceIndicator?.querySelector(".zen-current-workspace-indicator-icon");
-if (!anchor) throw new Error("no space icon to anchor the picker");
-const shown = onPopup(panel, "popupshown");
-// As changeWorkspaceIcon() opens it, minus saving; closing without a pick rejects the promise.
-Promise.resolve(gZenEmojiPicker.open(anchor, { closeOnSelect: false })).catch(() => {});
-await shown;
+// The space menu's "change icon" item runs this; it opens the picker on the space icon.
+gZenWorkspaces.changeWorkspaceIcon();
+await until(() => panel.state == "open", 10000, "#PanelUI-zen-emojis-picker to open");
 const emojis = await until(() => byId("PanelUI-zen-emojis-picker-list").children.length, 5000, "the emoji list");
 await sleep(300);
 return { emojis };""", ())]),
@@ -230,7 +236,7 @@ return { url: gBrowser.currentURI.spec };""", ())]),
 const tab = await selectWebTab();
 const menu = byId("tabContextMenu");
 const shown = onPopup(menu, "popupshown");
-contextClick(tab);
+openContext(menu, tab);
 await shown;
 await sleep(300);
 return { items: [...menu.children].filter(i => i.localName == "menuitem" && !i.hidden).length };""", ())]),
@@ -240,7 +246,7 @@ const indicator = gZenWorkspaces.activeWorkspaceIndicator;
 if (!indicator) throw new Error("no space indicator");
 const menu = byId("zenWorkspaceMoreActions");
 const shown = onPopup(menu, "popupshown");
-contextClick(indicator);
+openContext(menu, indicator);
 await shown;
 await sleep(300);
 return { items: [...menu.children].filter(i => i.localName == "menuitem" && !i.hidden).length };""", ())]),
