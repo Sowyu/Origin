@@ -76,8 +76,9 @@ window.gZenUIManager = {
   },
 
   /**
-   * Speeds up the chrome's CSS transitions and animations by animationSpeed as
-   * they start. Pages run in their own processes, so this never reaches them.
+   * Speeds up the chrome's CSS transitions and one-shot animations by
+   * animationSpeed as they start. Pages run in their own processes, so this
+   * never reaches them.
    */
   _initAnimationSpeed() {
     const speedUp = event => {
@@ -96,8 +97,11 @@ window.gZenUIManager = {
             )
         : target.getAnimations();
       for (const animation of animations) {
+        // Loops such as the tab throbber keep their pace: spinning faster
+        // makes nothing finish sooner.
         if (
           animation.playbackRate === 1 &&
+          animation.effect?.getTiming().iterations !== Infinity &&
           (event.type === "transitionrun"
             ? animation.transitionProperty === event.propertyName
             : animation.animationName === event.animationName)
