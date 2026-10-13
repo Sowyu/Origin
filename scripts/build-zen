@@ -30,9 +30,15 @@ COMMANDS = {
     "stage": ["./mach", "package"],
 }
 
+# One build ID for every file a run generates. Without MOZ_BUILD_DATE each generation step takes the
+# current time, and pre-release 6 shipped binaries, application.ini and platform.ini with three IDs.
+BUILD_DATE = time.strftime("%Y%m%d%H%M%S")
+
 def env():
     out = subprocess.run(["/bin/zsh", "-c", f". {ROOT}/scripts/env.sh && env -0"], capture_output=True, check=True).stdout
-    return dict(line.split("=", 1) for line in out.decode().split("\0") if "=" in line)
+    e = dict(line.split("=", 1) for line in out.decode().split("\0") if "=" in line)
+    e.setdefault("MOZ_BUILD_DATE", BUILD_DATE)
+    return e
 
 def sh(*cmd):
     return subprocess.run(cmd, capture_output=True, text=True).stdout

@@ -102,6 +102,17 @@ def keychain_path(name):
     return os.path.abspath(name) if "/" in name else os.path.expanduser("~/Library/Keychains/%s.keychain-db" % name)
 
 
+def compiled_build_id(app, exe):
+    """The one 14-digit build ID that both XUL and the launcher carry as a string, or None."""
+    found = []
+    for binary in ("XUL", exe):
+        out = subprocess.run(["strings", "-a", os.path.join(app, "Contents", "MacOS", binary)],
+                             capture_output=True, text=True).stdout
+        found.append({l for l in out.splitlines() if re.fullmatch(r"20[0-9]{12}", l)})
+    both = found[0] & found[1]
+    return both.pop() if len(both) == 1 else None
+
+
 def check_app(app, a):
     """Returns (info dict, list of gate failures). Every failure stops a real run."""
     res = os.path.join(app, "Contents", "Resources")
@@ -109,13 +120,22 @@ def check_app(app, a):
     plist = plistlib.load(open(os.path.join(app, "Contents", "Info.plist"), "rb"))
     info = {
         "version": a.version or appini.get("App", "Version"),
-        # Services.appinfo.appBuildID comes from application.ini, and UpdateService compares with that.
-        "build_id": appini.get("App", "BuildID"),
+        # UpdateService compares the feed's buildID with Services.appinfo.appBuildID, which the launcher
+        # compiles in (application.ini.h). The application.ini file can carry a later timestamp: in
+        # pre-release 6 it said 20261014003239 while the app reported 20261014003225, and that feed made
+        # every install update to itself again. So take the ID compiled into XUL and the launcher.
+        "build_id": compiled_build_id(app, plist.get("CFBundleExecutable", "")),
+        "file_build_id": appini.get("App", "BuildID"),
         "platform_version": plat.get("Build", "Milestone", fallback=appini.get("Gecko", "MinVersion", fallback="")),
         "update_url": appini.get("AppUpdate", "URL", fallback=""),
         "name": plist.get("CFBundleName", ""),
     }
     gates = []
+    if not info["build_id"]:
+        gates.append("could not read one build ID compiled into both XUL and the launcher")
+    elif info["build_id"] != info["file_build_id"]:
+        print("note: application.ini says build %s, the binaries say %s; the feed uses the binaries'"
+              % (info["file_build_id"], info["build_id"]))
     sig = subprocess.run(["codesign", "--verify", "--deep", "--strict", app], capture_output=True)
     team = subprocess.run(["codesign", "-dv", app], capture_output=True, text=True).stderr
     team = next((l.split("=", 1)[1] for l in team.splitlines() if l.startswith("TeamIdentifier=")), "none")
