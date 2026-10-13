@@ -75,6 +75,11 @@
     "prefs": {"zen.widget.macos.window-material": 7},
     "scenarios": ["scroll", "video-windowed"]
   },
+  "material-popover": {
+    "what": "window material 3 (Popover) instead of Zen's 1 (HUDWindow)",
+    "prefs": {"zen.widget.macos.window-material": 3},
+    "scenarios": ["scroll", "video-windowed"]
+  },
   "no-wr-compositor": {
     "what": "control for bug 1574586: WebRender draws one window-sized surface instead of native layers, so WindowServer should rise in Zen and Firefox alike",
     "prefs": {"gfx.webrender.compositor": false},
