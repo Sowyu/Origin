@@ -1,0 +1,214 @@
+#!/usr/bin/python3
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Writes one self-contained HTML results page from report .json files.
+
+Usage: scripts/perf/results-page <report.json> [...] --browsers origin,zen-official,zen-stock,firefox,safari
+                                 --out <file.html>
+       scripts/perf/results-page --self-test
+
+The page is meant to sit inline in a chat app that injects theme variables, so it uses only
+--foreground, --muted-foreground, --card, --border, --radius, --font-sans, --font-mono and
+--chart-1 to --chart-6. Bars show the median, the thin line on each bar the min to max range.
+Comparisons use the compare script's noise rule. A browser that appears in several files takes
+its rows from the last file that has them.
+"""
+import argparse, html, os, sys
+from importlib.machinery import SourceFileLoader
+
+compare = SourceFileLoader("compare", os.path.join(os.path.dirname(os.path.abspath(__file__)), "compare")).load_module()
+
+NAMES = {"origin": "Origin", "zen-official": "Official Zen", "zen-stock": "Zen built here",
+         "firefox": "Firefox", "safari": "Safari", "none": "No browser"}
+# Color follows the browser, never its column, so a missing browser repaints nothing.
+COLORS = {"origin": 1, "zen-official": 2, "zen-stock": 3, "firefox": 4, "safari": 5}
+HEADLINE = [("scroll", "scroll", "Scroll"), ("video-windowed", "video-windowed", "Windowed video"),
+            ("switch", "tabs", "Tab switches"), ("switch", "spaces", "Space switches"),
+            ("split", "split", "Split drag"), ("sidebar", "sidebar", "Sidebar"), ("typing", "typing", "Typing")]
+LABELS = {("idle", "idle"): "Idle", ("minimized", "minimized"): "Minimized",
+          ("video-fullscreen", "video-fullscreen"): "Fullscreen video", ("bgtimer", "bgtimer"): "Background timer",
+          **{(s, w): l for s, w, l in HEADLINE}}
+WISH_MB = 500
+
+CSS = """
+.rp{font-family:var(--font-sans,sans-serif);color:var(--foreground);line-height:1.45;max-width:100%}
+.rp h2{font-size:1.05rem;font-weight:600;margin:1.6rem 0 .3rem}
+.rp h3{font-size:.9rem;font-weight:600;margin:0 0 .5rem}
+.rp p{margin:.2rem 0}
+.rp .note{color:var(--muted-foreground);font-size:.8rem}
+.rp .sum{list-style:none;padding:0;margin:.4rem 0}
+.rp .sum li{padding:.15rem 0}
+.rp .num{font-family:var(--font-mono,monospace);font-variant-numeric:tabular-nums}
+.rp .na{color:var(--muted-foreground)}
+.rp .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(19rem,1fr));gap:.75rem;margin-top:.6rem}
+.rp .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem .85rem}
+.rp .row{display:grid;grid-template-columns:7.5rem 1fr 4.6rem;align-items:center;gap:.5rem;height:24px;font-size:.8rem}
+.rp .row .v{text-align:right}
+.rp .track{position:relative;height:24px;border-left:1px solid var(--border)}
+.rp .bar{position:absolute;left:0;top:5px;height:14px;border-radius:0 4px 4px 0}
+.rp .rng{position:absolute;top:11px;height:2px;background:var(--foreground);opacity:.75}
+.rp .rng::before,.rp .rng::after{content:"";position:absolute;top:-3px;width:1px;height:8px;background:var(--foreground)}
+.rp .rng::before{left:0}.rp .rng::after{right:0}
+.rp .mark{position:absolute;top:0;bottom:0;width:1px;background:var(--muted-foreground)}
+.rp .marklabel{position:relative;height:16px;font-size:.72rem;color:var(--muted-foreground)}
+.rp .marklabel span{position:absolute;white-space:nowrap;padding-left:4px;border-left:1px solid var(--muted-foreground)}
+.rp table{border-collapse:collapse;font-size:.8rem;margin-top:.5rem}
+.rp th,.rp td{text-align:left;padding:.3rem .9rem .3rem 0;border-bottom:1px solid var(--border)}
+.rp th{font-weight:600;color:var(--muted-foreground)}
+.rp td.r,.rp th.r{text-align:right}
+"""
+
+
+def esc(s):
+    return html.escape(str(s), quote=True)
+
+
+def name(b):
+    return NAMES.get(b, b)
+
+
+def fmt(v, digits=0):
+    return f"{v:,.{digits}f}"
+
+
+def chart(title, cells, browsers, unit, digits=0, marker=None, marker_label=None, note=None):
+    """One horizontal bar chart. cells: browser -> {"median","min","max"} or None."""
+    present = [c for c in cells.values() if c]
+    top = max([c["max"] for c in present] + ([marker] if marker else []) + [1e-9])
+    top *= 1.04
+    pc = lambda v: f"{max(v, 0) / top * 100:.2f}%"
+    out = [f'<div class="card"><h3>{esc(title)}</h3>']
+    if marker is not None and marker_label:
+        out.append(f'<div class="row" style="height:16px"><span></span><div class="marklabel">'
+                   f'<span style="left:{pc(marker)}">{esc(marker_label)}</span></div><span></span></div>')
+    for b in browsers:
+        c = cells.get(b)
+        out.append(f'<div class="row"><span>{esc(name(b))}</span>')
+        mark = f'<div class="mark" style="left:{pc(marker)}"></div>' if marker is not None else ""
+        if not c:
+            out.append(f'<div class="track">{mark}</div><span class="v na">n/a</span></div>')
+            continue
+        tip = (f"{name(b)}: median {fmt(c['median'], digits)} {unit}, "
+               f"range {fmt(c['min'], digits)} to {fmt(c['max'], digits)}")
+        color = f"var(--chart-{COLORS.get(b, 6)})"
+        out.append(f'<div class="track" title="{esc(tip)}">'
+                   f'<div class="bar" style="width:{pc(c["median"])};background:{color}"></div>{mark}'
+                   f'<div class="rng" style="left:{pc(c["min"])};width:{pc(c["max"] - c["min"])}"></div></div>'
+                   f'<span class="v num">{fmt(c["median"], digits)} {esc(unit)}</span></div>')
+    if note:
+        out.append(f'<p class="note">{esc(note)}</p>')
+    out.append("</div>")
+    return "".join(out)
+
+
+def summary(idx, browsers):
+    if "origin" not in browsers or not any(k[0] == "origin" for k in idx):
+        return '<p class="na">Origin has no rows in these reports yet, so there is nothing to compare.</p>'
+    items = []
+    for scen, win, label in HEADLINE:
+        mine = (idx.get(("origin", scen, win)) or {}).get("sys_combined_mw")
+        parts = []
+        for ref in ("zen-official", "firefox"):
+            theirs = (idx.get((ref, scen, win)) or {}).get("sys_combined_mw")
+            p = compare.pct(mine, theirs)
+            cls = "num" if p.endswith("%") else "na"
+            parts.append(f'<span class="{cls}">{esc(p)}</span> against {esc(name(ref))}')
+        items.append(f"<li>{esc(label)}: " + ", ".join(parts) + "</li>")
+    return '<ul class="sum">' + "".join(items) + "</ul>"
+
+
+def runs_table(rows, idx, browsers):
+    head = ('<table><tr><th>Who</th><th class="r">Scenarios</th><th class="r">Runs each</th>'
+            '<th class="r">Noisy runs</th><th class="r">Whole Mac, mW</th><th class="r">WindowServer, mW</th></tr>')
+    body = []
+    for b in ["none"] + browsers:
+        mine = [r for r in rows if r["browser"] == b]
+        if not mine:
+            body.append(f'<tr><td>{esc(name(b))}</td>' + '<td class="r na">n/a</td>' * 5 + "</tr>")
+            continue
+        n = [r["runs"] for r in mine]
+        runs = str(min(n)) if min(n) == max(n) else f"{min(n)} to {max(n)}"
+        ref = idx.get(("none", "empty", "empty") if b == "none" else (b, "idle", "idle")) or {}
+        cell = lambda c: (f'<td class="r num">{fmt(c["median"])} ({fmt(c["min"])} to {fmt(c["max"])})</td>'
+                          if c else '<td class="r na">n/a</td>')
+        body.append(f'<tr><td>{esc(name(b))}</td><td class="r num">{len(mine)}</td><td class="r num">{runs}</td>'
+                    f'<td class="r num">{sum(r.get("noisy_runs", 0) for r in mine)}</td>'
+                    f'{cell(ref.get("sys_combined_mw"))}{cell(ref.get("ws_mw"))}</tr>')
+    return head + "".join(body) + "</table>"
+
+
+def page(rows, browsers, batches):
+    idx = {(r["browser"], r["scenario"], r["window"]): r for r in rows}
+    get = lambda b, s, w, f: f(idx[(b, s, w)]) if (b, s, w) in idx else None
+    floor = (idx.get(("none", "empty", "empty")) or {}).get("sys_combined_mw")
+    scen = [(s, w, LABELS.get((s, w), l)) for s, w, l in compare.ROWS if s != "launch"]
+    floor_note = f"The grey line marks the no-browser floor, {fmt(floor['median'])} mW." if floor else None
+    h = ['<!doctype html><html lang="en"><head><meta charset="utf-8">'
+         '<meta name="viewport" content="width=device-width,initial-scale=1">'
+         f"<title>Origin results</title><style>{CSS}</style></head><body>", '<div class="rp">']
+    h += ["<h2>Origin against official Zen and Firefox</h2>",
+          '<p class="note">Whole-Mac power, median change. "Within noise" means the min to max ranges overlap.</p>',
+          summary(idx, browsers)]
+    h += ["<h2>Whole-Mac power</h2>",
+          '<p class="note">Everything the Mac draws while the browser runs the scenario. '
+          "Bars are medians, the thin line is the min to max range. Shorter is better.</p>", '<div class="grid">']
+    h += [chart(l, {b: get(b, s, w, lambda r: r.get("sys_combined_mw")) for b in browsers}, browsers, "mW",
+                marker=floor["median"] if floor else None, note=floor_note) for s, w, l in scen]
+    h += ["</div>", "<h2>Browser plus WindowServer power</h2>",
+          '<p class="note">The browser\'s own processes plus the macOS compositor that draws its windows.</p>',
+          '<div class="grid">']
+    h += [chart(l, {b: get(b, s, w, lambda r: compare.add(r.get("app_mw"), r.get("ws_mw"))) for b in browsers},
+                browsers, "mW") for s, w, l in scen]
+    h += ["</div>", "<h2>Memory at idle</h2>", '<div class="grid">',
+          chart("Memory footprint", {b: get(b, "idle", "idle", lambda r: r.get("footprint_mb")) for b in browsers},
+                browsers, "MB", marker=WISH_MB, marker_label=f"the user's {WISH_MB} MB wish"), "</div>"]
+    h += ["<h2>Launch</h2>", '<div class="grid">',
+          chart("First paint", {b: get(b, "launch", "launch", lambda r: r.get("first_paint_ms")) for b in browsers},
+                browsers, "ms"),
+          chart("Launch energy", {b: get(b, "launch", "launch", lambda r: r.get("app_energy_j")) for b in browsers},
+                browsers, "J", digits=1), "</div>"]
+    h += ["<h2>Floor and run counts</h2>",
+          '<p class="note">Power columns show the median and range at idle, or with no browser open.</p>',
+          runs_table(rows, idx, browsers),
+          f'<p class="note" style="margin-top:.8rem">Batches: {esc(" + ".join(batches))}.</p>', "</div></body></html>"]
+    return "\n".join(h)
+
+
+def self_test():
+    from html.parser import HTMLParser
+    a = {"median": 10, "min": 9, "max": 11}
+    rows = [{"browser": b, "scenario": s, "window": w, "runs": 3, "sys_combined_mw": a, "app_mw": a, "ws_mw": a,
+             "footprint_mb": a, "first_paint_ms": a, "app_energy_j": a}
+            for b in ("origin", "zen-official") for s, w, _ in compare.ROWS]
+    out = page(rows, ["origin", "zen-official", "firefox"], ["t"])
+    HTMLParser().feed(out)
+    assert "within noise</span> against Official Zen" in out and "n/a</span> against Firefox" in out
+    assert out.count('class="v na">n/a') >= 12, "firefox rows should be n/a"
+    assert "Origin has no rows" in page(rows[len(rows) // 2:], ["zen-official"], ["t"])
+    print("ok")
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("reports", nargs="*")
+    p.add_argument("--browsers", help="comma list, row order")
+    p.add_argument("--out", help="the .html file to write")
+    p.add_argument("--self-test", action="store_true")
+    a = p.parse_args()
+    if a.self_test:
+        return self_test()
+    if not a.reports or not a.browsers or not a.out:
+        p.error("need report files, --browsers and --out")
+    rows, names = [], []
+    for path in a.reports:
+        r, n = compare.load(path)
+        rows += r
+        names.append(n)
+    rows = list({(r["browser"], r["scenario"], r["window"]): r for r in rows}.values())
+    with open(a.out, "w") as f:
+        f.write(page(rows, a.browsers.split(","), names))
+
+
+if __name__ == "__main__":
+    main()
