@@ -80,5 +80,12 @@
     "ui": "zen",
     "template": "origin-v3",
     "note": "pre-release 2: the release build with thin LTO and PGO, signed with the Apple Development identity"
+  },
+  "origin-release-3": {
+    "app": "builds/origin-release-3/Origin.app",
+    "engine": "gecko",
+    "ui": "zen",
+    "template": "origin-v3",
+    "note": "pre-release 3: debloat pass 2 (Motion, blurs and dormant patches cut, spec prefs, hot paths, memory trim) with thin LTO and PGO, signed with the Apple Development identity"
   }
 }

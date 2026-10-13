@@ -136,6 +136,11 @@ if [ "$from" -le 2 ]; then
 fi
 
 echo "=== stage 3 of 3: thin LTO build with the profile $(date +%T)"
+# surfer build asks for confirmation when src holds a different number of patches than the last
+# import applied, and without a terminal it takes that as no and exits 0 without building.
+patches=$(find src -name '*.patch' | wc -l | tr -d ' ')
+[ "$patches" = "$(cat .surfer/patchCount 2>/dev/null)" ] ||
+  die "src has $patches patches but the last import applied $(cat .surfer/patchCount 2>/dev/null); run scripts/build-origin import locales, then build-origin-pgo 3"
 mkdir -p "$lto_cache"
 # ZEN_DISABLE_LTO and ZEN_GA_DISABLE_PGO unset: configs/common/mozconfig turns on
 # --enable-lto=cross,thin and configs/macos/mozconfig --enable-profile-use=cross with ~/artifact.
