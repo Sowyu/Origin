@@ -955,9 +955,16 @@ class nsZenWindowSync {
     // eslint-disable-next-line no-async-promise-executor
     return new Promise(async resolve => {
       if (callback) {
-        const mySrc = await this.#captureBrowserToURL(aOtherTab);
-
-        await this.#createPseudoImageForBrowser(otherBrowser, mySrc);
+        // Origin: nobody sees the stand-in in a hidden or minimized window,
+        // so skip the viewport snapshot and its PNG encode there.
+        const otherWin = aOtherTab.documentGlobal;
+        if (
+          !otherWin.document.hidden &&
+          otherWin.windowState !== otherWin.STATE_MINIMIZED
+        ) {
+          const mySrc = await this.#captureBrowserToURL(aOtherTab);
+          await this.#createPseudoImageForBrowser(otherBrowser, mySrc);
+        }
         callback();
         lazy.setTimeout(() => {
           otherBrowser.setAttribute("zen-pseudo-hidden", "true");
@@ -1383,7 +1390,8 @@ class nsZenWindowSync {
     }
     this.#runOnAllWindows(window, win => {
       const newTab = win.gBrowser.addTrustedTab("about:blank", {
-        animate: true,
+        // Origin: the copy opens in a window the user is not looking at.
+        skipAnimation: true,
         createLazyBrowser: true,
         userContextId: tab.userContextId,
         _forZenEmptyTab: tab.hasAttribute("zen-empty-tab"),

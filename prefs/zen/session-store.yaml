@@ -5,8 +5,9 @@
 - name: zen.session-store.backup-file
   value: true
 
+# Origin: no console line on every session save, the same as zen.window-sync.log.
 - name: zen.session-store.log
-  value: true
+  value: false
 
 - name: zen.session-store.restore-unsynced-windows
   value: true

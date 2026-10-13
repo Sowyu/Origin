@@ -274,8 +274,19 @@ const globalActionsTemplate = [
   },
 ];
 
+// Origin: the actions provider reads every label on each keystroke, so keep
+// the formatted strings until the app locale changes.
+const formattedValues = new Map();
+Services.obs.addObserver(
+  () => formattedValues.clear(),
+  "intl:app-locales-changed"
+);
+
 export function formatValueSync(l10nId) {
-  return lazy.l10n.formatValueSync(l10nId);
+  if (!formattedValues.has(l10nId)) {
+    formattedValues.set(l10nId, lazy.l10n.formatValueSync(l10nId));
+  }
+  return formattedValues.get(l10nId);
 }
 
 export const globalActions = globalActionsTemplate.map(action => ({

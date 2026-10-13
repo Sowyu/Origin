@@ -95,6 +95,10 @@ export class nsZenSessionManager {
    * A deferred task to create backups of the session file.
    */
   #deferredBackupTask = null;
+  /**
+   * Whether clean.jsonlz4 already holds the file from the start of this launch.
+   */
+  #hasCleanBackup = false;
 
   init() {
     this.log("Initializing session manager");
@@ -134,7 +138,12 @@ export class nsZenSessionManager {
 
   async #getBackupRecoveryOrder() {
     // Also add the most recent backup file to the recovery order
-    let backupFiles = [PathUtils.join(this.#backupFolderPath, "clean.jsonlz4")];
+    // Origin: recovery.baklz4 is the save before the last one, which is what
+    // clean.jsonlz4 held before it was copied only once per launch.
+    let backupFiles = [
+      PathUtils.join(this.#backupFolderPath, "recovery.baklz4"),
+      PathUtils.join(this.#backupFolderPath, "clean.jsonlz4"),
+    ];
     let prefix = PathUtils.join(this.#backupFolderPath, "zen-sessions-");
     try {
       let files = await IOUtils.getChildren(this.#backupFolderPath);
@@ -603,13 +612,21 @@ export class nsZenSessionManager {
       // browsing mode. We also don't want to save if there are no windows.
       return;
     }
-    const cleanPath = PathUtils.join(this.#backupFolderPath, "clean.jsonlz4");
-    IOUtils.copy(this.#storeFilePath, cleanPath, { recursive: true }).catch(
-      () => {
-        /* ignore errors creating clean backup, as it is not critical and
-         * we want to save the session even if we fail to create it */
-      }
-    );
+    if (!this.#hasCleanBackup) {
+      // Origin: copy the file from the last launch once instead of on every
+      // save. recovery.baklz4 already holds the save before the current one.
+      const cleanPath = PathUtils.join(this.#backupFolderPath, "clean.jsonlz4");
+      IOUtils.copy(this.#storeFilePath, cleanPath, { recursive: true }).then(
+        () => {
+          this.#hasCleanBackup = true;
+        },
+        () => {
+          /* ignore errors creating clean backup, as it is not critical and
+           * we want to save the session even if we fail to create it.
+           * The next save tries again. */
+        }
+      );
+    }
     this.#collectWindowData(windows);
     // Let interested consumers (e.g. Firefox Sync) know fresh sidebar data
     // is available, without this module knowing anything about them.
