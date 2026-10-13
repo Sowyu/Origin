@@ -94,5 +94,12 @@
     "ui": "zen",
     "template": "origin-v3",
     "note": "pre-release 4: pre-release 3 with the UI's animations 2.5 times as fast (front-end rebuild on the same LTO and PGO binaries)"
+  },
+  "origin-5": {
+    "app": "builds/origin-5-test/Origin.app",
+    "engine": "gecko",
+    "ui": "zen",
+    "template": "origin-v3",
+    "note": "test build for pre-release 5: pre-release 4 plus fix A, fix B and the idle tile buffers, each off by pref; thin LTO and PGO, signed"
   }
 }
