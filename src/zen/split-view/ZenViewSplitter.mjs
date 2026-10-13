@@ -78,6 +78,7 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
   overlay = null;
   _splitNodeToSplitters = new Map();
   _tabToSplitNode = new WeakMap();
+  _lastInsets = new WeakMap();
   dropZone;
   _edgeHoverSize;
   minResizeWidth;
@@ -1674,8 +1675,9 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
    * Apply grid layout to tabBrowserPanel
    *
    * @param {nsSplitNode} splitNode nsSplitNode
+   * @param {boolean} updateCommands Also update cmd_zenSplitViewLinkInNewTab.
    */
-  applyGridLayout(splitNode) {
+  applyGridLayout(splitNode, updateCommands = true) {
     if (!splitNode.positionToRoot) {
       splitNode.positionToRoot = { top: 0, bottom: 0, left: 0, right: 0 };
     }
@@ -1684,7 +1686,10 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
       const browserContainer = splitNode.tab.linkedBrowser.closest(
         ".browserSidebarContainer"
       );
-      browserContainer.style.inset = `${nodeRootPosition.top}% ${nodeRootPosition.right}% ${nodeRootPosition.bottom}% ${nodeRootPosition.left}%`;
+      this.#setInset(
+        browserContainer,
+        `${nodeRootPosition.top}% ${nodeRootPosition.right}% ${nodeRootPosition.bottom}% ${nodeRootPosition.left}%`
+      );
       this._tabToSplitNode.set(splitNode.tab, splitNode);
       return;
     }
@@ -1709,7 +1714,7 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
         left: leftOffset,
       };
       childNode.positionToRoot = childRootPosition;
-      this.applyGridLayout(childNode);
+      this.applyGridLayout(childNode, false);
 
       if (splitNode.direction === "column") {
         topOffset += childNode.sizeInParent * rootToNodeHeightRatio;
@@ -1720,13 +1725,42 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
       if (i < splittersNeeded) {
         const splitter = currentSplitters[i];
         if (splitNode.direction === "column") {
-          splitter.style.inset = `${100 - childRootPosition.bottom}% ${childRootPosition.right}% 0% ${childRootPosition.left}%`;
+          this.#setInset(
+            splitter,
+            `${100 - childRootPosition.bottom}% ${childRootPosition.right}% 0% ${childRootPosition.left}%`
+          );
         } else {
-          splitter.style.inset = `${childRootPosition.top}% 0% ${childRootPosition.bottom}% ${100 - childRootPosition.right}%`;
+          this.#setInset(
+            splitter,
+            `${childRootPosition.top}% 0% ${childRootPosition.bottom}% ${100 - childRootPosition.right}%`
+          );
         }
       }
     });
-    this.maybeDisableOpeningTabOnSplitView();
+    if (updateCommands) {
+      this.maybeDisableOpeningTabOnSplitView();
+    }
+  }
+
+  /**
+   * Writes style.inset only when it differs from what this splitter last
+   * wrote. Comparing the serialized value too catches writes from elsewhere
+   * (resetTabState clears it, animations may set it).
+   *
+   * @param {Element} element
+   * @param {string} inset
+   */
+  #setInset(element, inset) {
+    // ponytail: string compare per element, per-pane dirty flag if profiles show style recalc
+    const last = this._lastInsets.get(element);
+    if (last?.value === inset && last.serialized === element.style.inset) {
+      return;
+    }
+    element.style.inset = inset;
+    this._lastInsets.set(element, {
+      value: inset,
+      serialized: element.style.inset,
+    });
   }
 
   /**
@@ -1837,44 +1871,52 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
         (100 - splitNode.positionToRoot.bottom - splitNode.positionToRoot.top);
     }
     const originalSizes = splitNode.children.map(c => c.sizeInParent);
+    // Read layout once per drag, not after every frame's writes.
+    const panelSize = this.tabBrowserPanel.getBoundingClientRect()[dimension];
+    // Keep only the latest pointer position and apply it at most once a frame.
+    let lastEvent = null;
+    let frame = 0;
+
+    const applyDrag = () => {
+      frame = 0;
+      originalSizes.forEach(
+        (s, i) => (splitNode.children[i].sizeInParent = s)
+      ); // reset changes
+
+      const movement = lastEvent[clientAxis] - startPosition;
+      let movementPercent = (movement / panelSize) * rootToNodeSize * 100;
+
+      let reducingMovement = Math.max(movementPercent, -movementPercent);
+      for (
+        let i = gridIdx + (movementPercent < 0 ? 0 : 1);
+        0 <= i && i < originalSizes.length;
+        i += movementPercent < 0 ? -1 : 1
+      ) {
+        const current = originalSizes[i];
+        const newSize = Math.max(
+          this.minResizeWidth,
+          current - reducingMovement
+        );
+        splitNode.children[i].sizeInParent = newSize;
+        const amountReduced = current - newSize;
+        reducingMovement -= amountReduced;
+        if (reducingMovement <= 0) {
+          break;
+        }
+      }
+      const increasingMovement =
+        Math.max(movementPercent, -movementPercent) - reducingMovement;
+      const increaseIndex = gridIdx + (movementPercent < 0 ? 1 : 0);
+      splitNode.children[increaseIndex].sizeInParent =
+        originalSizes[increaseIndex] + increasingMovement;
+      this.applyGridLayout(splitNode, false);
+    };
 
     const dragFunc = dEvent => {
-      requestAnimationFrame(() => {
-        originalSizes.forEach(
-          (s, i) => (splitNode.children[i].sizeInParent = s)
-        ); // reset changes
-
-        const movement = dEvent[clientAxis] - startPosition;
-        let movementPercent =
-          (movement / this.tabBrowserPanel.getBoundingClientRect()[dimension]) *
-          rootToNodeSize *
-          100;
-
-        let reducingMovement = Math.max(movementPercent, -movementPercent);
-        for (
-          let i = gridIdx + (movementPercent < 0 ? 0 : 1);
-          0 <= i && i < originalSizes.length;
-          i += movementPercent < 0 ? -1 : 1
-        ) {
-          const current = originalSizes[i];
-          const newSize = Math.max(
-            this.minResizeWidth,
-            current - reducingMovement
-          );
-          splitNode.children[i].sizeInParent = newSize;
-          const amountReduced = current - newSize;
-          reducingMovement -= amountReduced;
-          if (reducingMovement <= 0) {
-            break;
-          }
-        }
-        const increasingMovement =
-          Math.max(movementPercent, -movementPercent) - reducingMovement;
-        const increaseIndex = gridIdx + (movementPercent < 0 ? 1 : 0);
-        splitNode.children[increaseIndex].sizeInParent =
-          originalSizes[increaseIndex] + increasingMovement;
-        this.applyGridLayout(splitNode);
-      });
+      lastEvent = dEvent;
+      if (!frame) {
+        frame = requestAnimationFrame(applyDrag);
+      }
     };
 
     window.setCursor(isVertical ? "ew-resize" : "ns-resize");
@@ -1883,6 +1925,11 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
       "mouseup",
       () => {
         document.removeEventListener("mousemove", dragFunc);
+        // Apply the last position while transitions are still off.
+        if (frame) {
+          cancelAnimationFrame(frame);
+          applyDrag();
+        }
         window.setCursor("auto");
         this.tabBrowserPanel.removeAttribute("zen-split-resizing");
       },

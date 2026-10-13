@@ -77,6 +77,13 @@
   }
 }
 
+/* No pane shadow while dragging a splitter: re-rasterising the blur every
+   frame costs main process and WindowServer energy. Three ids beat the
+   (2,6,0) shadow rule in zen-browser-container.css without !important. */
+#main-window #tabbrowser-tabbox #tabbrowser-tabpanels[zen-split-resizing] > [zen-split="true"] {
+  box-shadow: none;
+}
+
 :root:not([inDOMFullscreen="true"]) #tabbrowser-tabpanels[zen-split-view="true"] .browserSidebarContainer.deck-selected {
   outline: 2px solid var(--zen-active-split-outline-color) !important;
 }
