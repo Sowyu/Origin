@@ -163,3 +163,29 @@ Two one-off checks need a launch but no energy run. Do them once on stock Zen wh
 2. Set `gfx.webrender.debug.dump-native-layer-tree-to-file` to true (`StaticPrefList.yaml:8677`) for a few frames. Dumps go to `~/Desktop/nativelayerdumps-<pid>/` (`NativeLayerCA.mm:287-300`). Delete them afterwards. They show whether the page tiles carry the rounded clip, which tests the compositor-clip claim in section 1.
 
 After A or B is built, the same scroll, video-windowed, switch, sidebar and split scenarios measure it against stock Zen and min-visual. Expect WindowServer and Mac GPU within a few mW of min-visual in scroll and video, and the sidebar scenario no worse than stock.
+
+## Why fix A cut no hole
+
+### The background that should fill the region
+
+The only opaque background behind the floating page is the `background` on `browser[type="content"]` when the `transparent` attribute is not set. The rule is `light-dark(rgb(255,255,255), rgb(32,32,32))` in `src/zen/common/styles/zen-browser-container.css:17-19`. With Origin's default prefs nothing makes it translucent, so it is opaque for a normal page. A tab with `transparent="true"` uses `--zen-transparent-browser-background` (alpha 0.1 to 0.6) and is not opaque, which is correct. Everything above the `browser` is transparent or paints no background in the page rect: `.browserSidebarContainer`, `#tabbrowser-tabpanels` (`background: transparent !important`, `zen-browser-ui.css:8-10`), `#browser` (`:27-29`), and `#zen-main-app-wrapper` (transparent on macOS, `zen-browser-ui.css:125`, `zen-theme.css:297-302`).
+
+### Ancestors that wrap their children
+
+I found no ancestor with opacity below 1, filter, backdrop-filter, mask, clip-path, mix-blend-mode, isolation, a transform or `will-change` between the `browser` and the root. The `isolation: isolate; contain: strict; will-change: background-color` rule in `zen-browser-ui.css:32-56` is on `.zen-browser-generic-background`, a sibling of the page and not an ancestor. The ancestors `#zen-tabbox-wrapper`, `#tabbrowser-tabbox` and `#zen-appcontent-wrapper` only set `position: relative` and `z-index` (`zen-tabs.css:9-12`, `content-area.css:156-160`, `zen-browser-ui.css:112-114,148-154`). A plain stacking context is flattened away by `FlattenedDisplayListIterator` and does not stop the region. `.browserSidebarContainer` uses `overflow: clip` plus a radius, which only adds a rounded item clip. `ApproximateIntersectInward` handles that. No XUL box adds a wrapping item here. The ancestor chain is not the blocker.
+
+### What stops the region
+
+The blocker is the `browser` element itself. For a remote browser, `nsSubDocumentFrame::BuildDisplayList` calls `WrapBackgroundColorInOwnLayer` (`engine/layout/generic/nsSubDocumentFrame.cpp:303-318`, called at `:341-348`). That moves the background-color item into an `nsDisplayOwnLayer` of type `OwnLayerForSubdoc`. `nsDisplayOwnLayer::ShouldFlattenAway` returns false (`engine/layout/painting/nsDisplayList.h:5539-5541`), so the item becomes a wrapping item. `AutoOpaqueRegionStateTracker` asks `AllowComputingOpaqueRegionAcross`, which accepts only `TYPE_TRANSFORM` (`WebRenderCommandBuilder.cpp:1944-1948`). It returns "no" for the own-layer item, sets `mComputingOpaqueRegion = false` for the wrapped list, and the background-color check at `:2072-2096` never runs for it. So the region never contains the page. This is from reading the code, not from a trace, so it is unverified at runtime. A display list dump would confirm it (`layout.display-list.dump` or `MOZ_LOG=nsDisplayList`, one launch).
+
+The comment on that function says the wrapping exists so the compositor can skip a ColorLayer when remote content is opaque. That reason belongs to the old layers backend. WebRender does not use it.
+
+### Options, smallest first
+
+1. Let the tracker pass through the subdoc own-layer wrapper. Add a case in `AllowComputingOpaqueRegionAcross` for `TYPE_OWN_LAYER` with `GetOwnLayerType() == OwnLayerForSubdoc` (accessor name unverified) that returns offset `nsPoint(0, 0)`. About 6 lines in one file, one new Gecko patch. The wrapped list holds only the background-color item, and the wrapper has no transform, so the offset is zero. The wrapper's clip still applies through the `mOpaqueRegionWrappers` loop. Risk is low. The region only feeds `UpdateOpaqueRegion`, and GTK and Windows already receive it. The Windows `glass` code path and GTK's Wayland path would also see the page rect. Unverified, but both only read the region. Zen's look and animations do not change, and no CSS is touched.
+2. Skip the wrapper for the parent process. In `WrapBackgroundColorInOwnLayer`, return early when the background is opaque. About 3 lines, but it changes how the compositor sees remote frame backgrounds, so risk is medium. Option 1 is better.
+3. Add the page rect from the frame. In `nsSubDocumentFrame::BuildDisplayList` for a remote frame whose background color is opaque, call `aBuilder->AddWindowOpaqueRegion(this, contentBox)`. About 8 lines, and it ignores clips and ancestor transforms, so risk is medium. It would also add the rect when the frame is hidden behind other items.
+4. Use `BrowserParent::mRect`. This does not work. `nsFrameLoader::UpdatePositionAndSize` fills it from `GetWindowDimensions`, which is the tree owner's whole-window position and size (`nsFrameLoader.cpp:2404-2425,2443`), not the page rect. `nsSubDocumentFrame` has the page size (`GetSubdocumentSize`) but the parent process keeps no page origin.
+5. Chrome JS passes the rect. No existing `nsIDOMWindowUtils` or widget call sets a window opaque rect. This needs a new IDL method, a JS observer for sidebar, split and compact-mode layout changes, and a frame of lag. Largest and riskiest, and it duplicates what layout already computes. Drop it.
+
+Next step: apply option 1, then rerun the test launch with `MOZ_LOG=nsCocoaWidgets:5` and look for the `UpdateOpaqueRegion hole` line.

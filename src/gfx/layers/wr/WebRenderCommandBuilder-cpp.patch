@@ -1,0 +1,17 @@
+diff --git a/gfx/layers/wr/WebRenderCommandBuilder.cpp b/gfx/layers/wr/WebRenderCommandBuilder.cpp
+index 8aa40151652d2153e057c47c82da49f7dbf993df..e1959a58254cb4c6f4d3cd15f12bc7f363513ba1 100644
+--- a/gfx/layers/wr/WebRenderCommandBuilder.cpp
++++ b/gfx/layers/wr/WebRenderCommandBuilder.cpp
+@@ -1944,6 +1944,12 @@ struct NewLayerData {
+ static Maybe<nsPoint> AllowComputingOpaqueRegionAcross(
+     nsDisplayItem* aWrappingItem, nsDisplayListBuilder* aBuilder) {
+   MOZ_ASSERT(aWrappingItem);
++  // Origin: WrapBackgroundColorInOwnLayer puts a remote browser's background
++  // in an own layer that does not move it, so the page counts as opaque.
++  if (aWrappingItem->GetType() == DisplayItemType::TYPE_OWN_LAYER &&
++      aWrappingItem->Frame()->IsSubDocumentFrame()) {
++    return Some(nsPoint());
++  }
+   if (aWrappingItem->GetType() != DisplayItemType::TYPE_TRANSFORM) {
+     return {};
+   }
