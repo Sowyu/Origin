@@ -1,5 +1,5 @@
 diff --git a/widget/cocoa/nsCocoaWindow.mm b/widget/cocoa/nsCocoaWindow.mm
-index e467ce48f523859aaff26023633d4d2d3978818f..f5015c9c7ca116c36ffa5efdae801227545f897f 100644
+index e467ce48f523859aaff26023633d4d2d3978818f..f8d4808eb41237be54974345a20312d2865c83e2 100644
 --- a/widget/cocoa/nsCocoaWindow.mm
 +++ b/widget/cocoa/nsCocoaWindow.mm
 @@ -86,6 +86,8 @@
@@ -11,7 +11,7 @@ index e467ce48f523859aaff26023633d4d2d3978818f..f5015c9c7ca116c36ffa5efdae801227
  #include "mozilla/WritingModes.h"
  #include "mozilla/dom/Document.h"
  #include "mozilla/layers/CompositorBridgeChild.h"
-@@ -1332,6 +1334,180 @@ - (NSRect)_opaqueRectForWindowMoveWhenInTitlebar {
+@@ -1332,6 +1334,185 @@ - (NSRect)_opaqueRectForWindowMoveWhenInTitlebar {
  }
  @end
  
@@ -127,6 +127,11 @@ index e467ce48f523859aaff26023633d4d2d3978818f..f5015c9c7ca116c36ffa5efdae801227
 +void nsCocoaWindow::UpdateOpaqueRegion(const LayoutDeviceIntRegion& aRegion) {
 +  NS_OBJC_BEGIN_TRY_IGNORE_BLOCK;
 +
++  MOZ_LOG(sCocoaLog, LogLevel::Verbose,
++          ("nsCocoaWindow::UpdateOpaqueRegion %u rects, bounds %d,%d %dx%d",
++           aRegion.GetNumRects(), aRegion.GetBounds().x, aRegion.GetBounds().y,
++           aRegion.GetBounds().width, aRegion.GetBounds().height));
++
 +  // ponytail: holes only the largest opaque rect, one hole per split view
 +  // pane if the split scenario measures worse than a single page.
 +  LayoutDeviceIntRect hole;
@@ -192,7 +197,7 @@ index e467ce48f523859aaff26023633d4d2d3978818f..f5015c9c7ca116c36ffa5efdae801227
  void nsCocoaWindow::UpdateWindowDraggingRegion(
      const LayoutDeviceIntRegion& aRegion) {
    // mChildView returns YES from mouseDownCanMoveWindow, so we need to put
-@@ -3877,7 +4053,9 @@ - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+@@ -3877,7 +4058,9 @@ - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
  // NSDraggingDestination
  - (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)sender {
    MOZ_LOG(sCocoaLog, LogLevel::Info, ("ChildView draggingUpdated: entered\n"));
@@ -203,7 +208,7 @@ index e467ce48f523859aaff26023633d4d2d3978818f..f5015c9c7ca116c36ffa5efdae801227
  }
  
  // NSDraggingDestination
-@@ -3893,6 +4071,9 @@ - (void)draggingExited:(id<NSDraggingInfo>)sender {
+@@ -3893,6 +4076,9 @@ - (void)draggingExited:(id<NSDraggingInfo>)sender {
  - (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
    nsAutoRetainCocoaObject kungFuDeathGrip(self);
    BOOL handled = [self doDragAction:eDrop sender:sender] != NSDragOperationNone;
@@ -213,7 +218,7 @@ index e467ce48f523859aaff26023633d4d2d3978818f..f5015c9c7ca116c36ffa5efdae801227
    NS_IF_RELEASE(mDragService);
    return handled;
  }
-@@ -4938,6 +5119,10 @@ - (BOOL)wantsBestResolutionOpenGLSurface {
+@@ -4938,6 +5124,10 @@ - (BOOL)wantsBestResolutionOpenGLSurface {
  nsCocoaWindow::~nsCocoaWindow() {
    NS_OBJC_BEGIN_TRY_IGNORE_BLOCK;
  
