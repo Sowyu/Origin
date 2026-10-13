@@ -16,26 +16,6 @@
   }
 }
 
-@keyframes zen-back-and-forth-text {
-  0%,
-  10% {
-    transform: translateX(0);
-    left: 0;
-  }
-
-  45%,
-  65% {
-    transform: translateX(calc(-100% - 5px));
-    left: 100%;
-  }
-
-  90%,
-  100% {
-    transform: translateX(0);
-    left: 0;
-  }
-}
-
 /* Mark: URL Bar */
 @keyframes zen-urlbar-searchmode {
   0% {
@@ -71,13 +51,3 @@
     transform: translateY(-10%);
   }
 }
-
-@keyframes zen-text-gradient {
-  0% {
-    background-position: 0% 50%;
-  }
-  100% {
-    background-position: -400% 50%;
-  }
-}
-

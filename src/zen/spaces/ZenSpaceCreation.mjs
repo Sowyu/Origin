@@ -91,10 +91,7 @@ class nsZenWorkspaceCreation extends MozXULElement {
   }
 
   get #spaceSwitchDuration() {
-    return (
-      Services.prefs.getIntPref("zen.workspaces.switch-animation-duration") /
-      1000
-    );
+    return Services.prefs.getIntPref("zen.workspaces.switch-animation-duration");
   }
 
   #dimUrlbar() {
@@ -102,20 +99,16 @@ class nsZenWorkspaceCreation extends MozXULElement {
       return;
     }
     this.#urlbarDimmed = true;
-    const animation = gZenUIManager.motion.animate(
+    gZenUIManager.animate(
       gURLBar,
       {
         opacity: [1, 0],
       },
       {
         duration: this.#spaceSwitchDuration,
-        type: "spring",
         bounce: 0,
       }
     );
-    if (gReduceMotion) {
-      animation.complete();
-    }
   }
 
   #restoreUrlbar() {
@@ -123,20 +116,16 @@ class nsZenWorkspaceCreation extends MozXULElement {
       return;
     }
     this.#urlbarDimmed = false;
-    const animation = gZenUIManager.motion.animate(
+    const animation = gZenUIManager.animate(
       gURLBar,
       {
         opacity: [0, 1],
       },
       {
         duration: this.#spaceSwitchDuration,
-        type: "spring",
         bounce: 0,
       }
     );
-    if (gReduceMotion) {
-      animation.complete();
-    }
     animation.then(() => {
       gURLBar.style.removeProperty("opacity");
     });
@@ -366,18 +355,16 @@ class nsZenWorkspaceCreation extends MozXULElement {
 
   async #cleanup({ animateOut = true } = {}) {
     if (animateOut && !gReduceMotion && this.isConnected) {
-      await gZenUIManager.motion.animate(
+      await gZenUIManager.animate(
         this.elementsToAnimate.reverse(),
         {
-          y: [0, 20],
+          transform: ["translateY(0)", "translateY(20px)"],
           opacity: [1, 0],
-          filter: ["blur(0)", "blur(2px)"],
         },
         {
-          duration: 0.3,
-          type: "spring",
+          duration: 300,
           bounce: 0,
-          delay: gZenUIManager.motion.stagger(0.03),
+          delay: index => index * 30,
         }
       );
     }
@@ -422,15 +409,14 @@ class nsZenWorkspaceCreation extends MozXULElement {
         element => element?.isConnected
       );
       if (elementsToReveal.length) {
-        gZenUIManager.motion
+        gZenUIManager
           .animate(
             elementsToReveal,
             {
               opacity: [0, 1],
             },
             {
-              duration: 0.3,
-              type: "spring",
+              duration: 300,
               bounce: 0,
             }
           )

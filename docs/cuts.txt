@@ -243,3 +243,20 @@ src/browser/themes/shared/zen-icons/nucleo/text-title-case.svg
 src/browser/themes/shared/zen-icons/nucleo/text-uppercase.svg
 src/browser/themes/shared/zen-icons/nucleo/video-blocked-fill.svg
 src/browser/themes/shared/zen-icons/nucleo/video-fill.svg
+
+# Acrylic effect (CSS backdrop-filter blur on twilight builds)
+src/zen/common/styles/zen-backdrop-filters.svg
+zen.theme.acrylic-urlbar
+zen.theme.acrylic-sidebar
+
+# Firefox patches that are dormant on macOS or only build on Windows
+src/external-patches/firefox/backdrop_filter_reads_web_content.patch
+src/external-patches/firefox/expose_tiled_attribute_to_all_platforms.patch
+src/external-patches/firefox/issue_14710.patch
+src/external-patches/firefox/override_cert_checks_temp.patch
+
+# Leftover assets of the cut welcome screen and download animation
+src/zen/common/styles/zen-branding.css
+src/zen/fonts/
+src/zen/images/downloads/
+zen-branding-title

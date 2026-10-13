@@ -1,0 +1,15 @@
+diff --git a/browser/extensions/moz.build b/browser/extensions/moz.build
+index 780cf23b9c50fdde933a8825c495b3cf9a1e9b53..132b4d30dca9a7cdbd9a03a7b108661ce3cfb1eb 100644
+--- a/browser/extensions/moz.build
++++ b/browser/extensions/moz.build
+@@ -4,10 +4,8 @@
+ 
+ DIRS += [
+     "formautofill",
+-    "ipp-activator",
+     "webcompat",
+     "pictureinpicture",
+-    "search-detection",
+     "newtab",
+ ]
+ 

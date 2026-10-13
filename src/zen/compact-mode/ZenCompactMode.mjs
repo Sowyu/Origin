@@ -465,21 +465,21 @@ window.gZenCompactModeManager = {
       sidebarWidth -= elementSeparation * (isCompactMode ? 1 : 3);
       if (canHideSidebar && isCompactMode) {
         this._setElementExpandAttribute(this.sidebar, false);
-        gZenUIManager.motion
+        // ponytail: the page widens in one step once the sidebar is out,
+        // because animating margin runs layout. Fine at 100 ms; resize the
+        // page with a transform if the snap shows.
+        gZenUIManager
           .animate(
             this.sidebar,
             {
-              marginRight: [
-                0,
-                this.sidebarIsOnRight ? `-${sidebarWidth}px` : 0,
+              transform: [
+                "translateX(0)",
+                `translateX(${this.sidebarIsOnRight ? "" : "-"}${sidebarWidth}px)`,
               ],
-              marginLeft: [0, this.sidebarIsOnRight ? 0 : `-${sidebarWidth}px`],
             },
             {
-              ease: "easeIn",
-              type: "spring",
               bounce: 0,
-              duration: 0.1,
+              duration: 100,
             }
           )
           .then(() => {
@@ -509,25 +509,18 @@ window.gZenCompactModeManager = {
         // Shouldn't be ever true, but just in case
         delete this._ignoreNextHover;
         document.getElementById("browser").style.overflow = "clip";
-        if (this.sidebarIsOnRight) {
-          this.sidebar.style.marginRight = `-${sidebarWidth}px`;
-        } else {
-          this.sidebar.style.marginLeft = `-${sidebarWidth}px`;
-        }
-        gZenUIManager.motion
+        gZenUIManager
           .animate(
             this.sidebar,
-            this.sidebarIsOnRight
-              ? {
-                  marginRight: [`-${sidebarWidth}px`, 0],
-                  transform: ["translateX(100%)", "translateX(0)"],
-                }
-              : { marginLeft: [`-${sidebarWidth}px`, 0] },
             {
-              ease: "easeOut",
-              type: "spring",
+              transform: [
+                `translateX(${this.sidebarIsOnRight ? "" : "-"}${sidebarWidth}px)`,
+                "translateX(0)",
+              ],
+            },
+            {
               bounce: 0,
-              duration: 0.1,
+              duration: 100,
             }
           )
           .then(() => {

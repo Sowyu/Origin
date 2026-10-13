@@ -34,6 +34,44 @@ Status 2026-10-13: the user said to go ahead with the debloat, and every cut bel
 - Window sync notice: a one-time dialog with a "Learn more" link to docs.zen-browser.app (`_migrateV6` in `ZenUIMigration.sys.mjs`).
 - Mozilla's "Want to help?" donate links in the About dialog, hidden with CSS because `aboutDialog.js` still reads the elements.
 - Hidden AI settings: Origin turns the remaining AI features off by pref in `prefs/origin/ai.yaml`. That covers smart tab groups, the extensions ML engine and the chatbot page entries. Translations keep working. Zen's patch that hides rows in Firefox's AI controls page is still in, pending a decision.
+- Acrylic effect: the blurred see-through urlbar and compact sidebar, only on twilight builds, through `backdrop-filter`. Done. The spec bans backdrop-filter in the UI, and it was off in release builds anyway. The prefs `zen.theme.acrylic-urlbar` and `zen.theme.acrylic-sidebar`, `zen-backdrop-filters.svg` and the `zen-no-acrylic` attribute code are gone. The notification bar and the theme picker's colour deck lost their blur too, with a higher opacity to stay readable.
+- External patch `backdrop_filter_reads_web_content`: only did something with acrylic on, so it was dormant. Deleted.
+- External patch `expose_tiled_attribute_to_all_platforms`: it sets `:root[tiled]` on macOS through a private `NSWindow` call, and no CSS or JS in Origin reads that attribute. Deleted.
+- External patch `issue_14710`: skips picture-in-picture auto-toggle after the user closes it on purpose. It only runs when the tab-switching auto-PiP pref is on, and Zen sets that off, so it was dormant. Deleted.
+- External patch `override_cert_checks_temp`: only compiles on Windows. Deleted.
+- Firefox's built-in add-ons `ipp-activator` (the helper for IP Protection, which Origin removed) and `search-detection` (reports search-engine changes by add-ons to telemetry, which is off). Both started a background page at launch and listened to tab or request events. Not built anymore (`src/browser/extensions/moz-build.patch`). Webcompat, form autofill, picture-in-picture and the new tab add-on stay.
+- Leftover assets of cut features: `zen-branding.css` and its two Junicode fonts (only the cut welcome screen used the `.zen-branding-title` class) and the downloads `archive.svg` (only the cut download animation used it). The stylesheet loaded in every window. Deleted, with Junicode's notice in `THIRD_PARTY.md`.
+
+## Motion and loops
+
+Origin drops the vendored Motion library (`src/zen/vendor/`, 140 KB). Each animation now runs through `gZenUIManager.animate()`, a small wrapper around Gecko's `element.animate()` on transform and opacity only. Motion's springs became fixed `linear()` easings sampled from Motion's own curves, with the same durations. Under Reduce Motion every one of them finishes at once.
+
+- Create button plus icon: Motion rotate, now the same rotate through `element.animate()`.
+- URL bar search mode pulse: Motion scale, now the same scale pulse.
+- Toasts: Motion scale spring and fade, now the same transform keyframes with the spring as `linear()`.
+- Tab and folder open: Motion fade, scale, label blur and a margin that pushed the tabs below down. Now fade and scale, and the visible items below slide down with a transform over the same 120 ms. The label blur is gone.
+- Tab and folder close: Motion fade, scale and a margin that pulled the tabs below up. Now fade and scale, and the visible items below slide up with a transform over the same 100 ms, then take the item's place when it is removed.
+- Tab rename pulse: Motion scale, now the same scale pulse.
+- Window sweep after sync: Motion on `top` and on a gradient position custom property, now two CSS keyframes on transform and opacity with the same timing.
+- Theme picker dots: Motion spring on `left` and `top`, now the dot jumps to its place and slides there with a `translate` spring.
+- Space switch: Motion's `animateMini` crossfade and slide, now the same keyframes. The slide no longer animates `padding-top`.
+- New space form closing: Motion slide, fade and blur with a stagger, now slide and fade with the same stagger and no blur.
+- URL bar dim while creating a space, and the reveal after it: Motion fades, now the same fades.
+- Compact mode sidebar: Motion on margins, now a transform slide. The page resizes in one step at the end of hiding and at the start of showing.
+- Split view drop target: Motion on padding, width and margin, now the page takes its split size at once and the drop target slides and fades in from its edge.
+- Split view drop: Motion scale and fade spring, now the same keyframes.
+- Feature callout title: the looping gradient sweep is gone, the gradient text stays still. It was the last of Zen's nine loops. The other eight left with the media controls, Boosts, the loading bar, the sidebar notification and the library.
+
+## Hot paths
+
+Smallest fixes from `docs/research/zen-hot-paths-2026-10-13.md`, not measured yet.
+
+- Session save copies `zen-sessions.jsonlz4` to `zen-sessions-backup/clean.jsonlz4` once per launch instead of on every save, and recovery tries `recovery.baklz4` first.
+- Window sync skips the viewport snapshot and its stand-in image when the window that loses the page is hidden or minimized.
+- Window sync opens its tab copies in other windows with `skipAnimation`, so no open animation plays in windows nobody is looking at.
+- URL bar actions keep their Fluent labels until the app locale changes, instead of formatting about 40 strings on every keystroke.
+- `zen.session-store.log` is off, so a session save no longer logs a console line.
+- Tab label and icon changes reach the pinned tab manager and window sync only when the label or icon really changed.
 
 ## Kept after review
 
@@ -46,6 +84,7 @@ Status 2026-10-13: the user said to go ahead with the debloat, and every cut bel
 - Memory prefs (`prefs/origin/memory.yaml`): no spare content processes and no preloaded new tab page.
 - Background prefs (`prefs/origin/background.yaml`): no Nimbus rollouts and no captive portal check, because macOS shows its own Wi-Fi login sheet.
 - Startup helpers cut from `BrowserComponents.manifest`: Firefox's IP Protection, link preview and content relevancy no longer start at launch, and their prefs (`browser.ipProtection.enabled`, `browser.ml.linkPreview.enabled`) are locked off in `prefs/origin/startup.yaml` and `prefs/firefox/ai.yaml`.
+- Firefox prefs (`prefs/origin/firefox.yaml`): global AI switch blocked with Translations kept available, usage reporting and connectivity checks off, no sponsored new tab content, a blank homepage and new tab page with 12 widget feeds and the wallpaper fetch off, and Firefox's low-memory tab unloading on (`browser.lowMemoryResponseMask` 3, acts only when macOS reports critical memory pressure).
 
 ## Replace with Firefox's own, after the rewrite study
 
@@ -75,6 +114,4 @@ Windows Mica, GTK transparency, the Windows pointer tracker and the Windows inst
 These are still open decisions.
 
 - `prefs/privatefox` and `prefs/fastfox` are reviewed (`docs/research/firefox-prefs-2026-10-13.md`) and none of their prefs changes a shipped security feature.
-- Zen's ten external Firefox patches (`src/external-patches`) are reviewed too and none weakens a security feature.
-- `override_cert_checks_temp` only compiles on Windows.
-- `backdrop_filter_reads_web_content` stays dormant while acrylic is off.
+- Zen's external Firefox patches (`src/external-patches`) are reviewed too and none weakens a security feature. Four are deleted, see above.

@@ -2108,9 +2108,9 @@ class nsZenWorkspaces {
     } = {}
   ) {
     gZenUIManager.tabsWrapper.style.scrollbarWidth = "none";
-    const kGlobalAnimationDuration =
-      Services.prefs.getIntPref("zen.workspaces.switch-animation-duration") /
-      1000;
+    const kGlobalAnimationDuration = Services.prefs.getIntPref(
+      "zen.workspaces.switch-animation-duration"
+    );
     this._animatingChange = true;
     const animations = [];
     const workspaces = this.getWorkspaces();
@@ -2178,17 +2178,16 @@ class nsZenWorkspaces {
           element.style.setProperty("--zen-background-opacity", 1);
         });
         const backgroundOptions = {
-          type: gZenUIManager.motion.spring,
           bounce: 0,
           duration: kGlobalAnimationDuration,
         };
         backgroundAnimations = [
-          gZenUIManager.motion.animateMini(
+          gZenUIManager.animate(
             elements,
             { opacity: [previousBackgroundOpacity, 1] },
             { ...backgroundOptions, pseudoElement: "::after" }
           ),
-          gZenUIManager.motion.animateMini(
+          gZenUIManager.animate(
             elements,
             { opacity: [1 - previousBackgroundOpacity, 0] },
             { ...backgroundOptions, pseudoElement: "::before" }
@@ -2196,13 +2195,9 @@ class nsZenWorkspaces {
         ];
         animations.push(...backgroundAnimations);
       }
-      // Motion's animate() only uses WAAPI for HTML and SVG elements, so on
-      // these XUL elements it ran the slide as a main-thread tick. animateMini()
-      // calls element.animate() with the same spring turned into a linear()
-      // easing, so Gecko can run the transform on the compositor. On finish it
-      // writes the last keyframe inline and cancels itself, like animate() did.
+      // gZenUIManager.animate() writes the last keyframe inline on finish and
+      // cancels itself, so the compositor runs the slide.
       const slideOptions = {
-        type: gZenUIManager.motion.spring,
         bounce: 0,
         duration: kGlobalAnimationDuration,
       };
@@ -2241,13 +2236,8 @@ class nsZenWorkspaces {
                 ? [existingTransform, newTransform]
                 : newTransform,
             };
-            if (!existingTransform) {
-              // Motion starts this one from the computed padding, which can
-              // still differ from the inline value while its transition runs.
-              keyframes.paddingTop = element.style.paddingTop;
-            }
             animations.push(
-              gZenUIManager.motion.animateMini(element, keyframes, slideOptions)
+              gZenUIManager.animate(element, keyframes, slideOptions)
             );
           }
         }
@@ -2298,7 +2288,7 @@ class nsZenWorkspaces {
           if (shouldAnimate) {
             container.style.transform = existingTransform;
             animations.push(
-              gZenUIManager.motion.animateMini(
+              gZenUIManager.animate(
                 container,
                 {
                   transform: [existingTransform, newTransform],
@@ -2314,7 +2304,7 @@ class nsZenWorkspaces {
         gZenUIManager.updateTabsToolbar();
       }
       let promiseTimeout = new Promise(resolve =>
-        setTimeout(resolve, kGlobalAnimationDuration * 1000 + 50)
+        setTimeout(resolve, kGlobalAnimationDuration + 50)
       );
       this.#currentSpaceSwitchContext.animations = animations;
       // See issue https://github.com/zen-browser/desktop/issues/9334, we need to add
@@ -2324,8 +2314,8 @@ class nsZenWorkspaces {
         console.error
       );
     } finally {
-      // Motion leaves pseudo-element animations filling forwards, so cancel
-      // them to hand the layers back to the variable, even if the switch threw.
+      // Pseudo-element animations keep filling forwards, so cancel them to
+      // hand the layers back to the variable, even if the switch threw.
       backgroundAnimations.forEach(animation => animation.cancel());
     }
     this.#currentSpaceSwitchContext.animations = [];

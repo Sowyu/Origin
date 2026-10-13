@@ -32,16 +32,6 @@ window.gZenUIManager = {
       true
     );
 
-    ChromeUtils.defineLazyGetter(this, "motion", () => {
-      Services.scriptloader.loadSubScript(
-        "chrome://browser/content/zen-vendor/motion.min.mjs",
-        window
-      );
-      const motion = window.Motion;
-      delete window.Motion;
-      return motion;
-    });
-
     ChromeUtils.defineLazyGetter(this, "_toastContainer", () => {
       return document.getElementById("zen-toast-container");
     });
@@ -59,7 +49,6 @@ window.gZenUIManager = {
 
     gZenVerticalTabsManager.init();
 
-    this._markAcrylicSupport();
     this._initCreateNewPopup();
     this._debloatContextMenus();
     this._addNewCustomizableButtonsIfNeeded();
@@ -74,28 +63,94 @@ window.gZenUIManager = {
   },
 
   /**
-   * Software WebRender can't filter the web content behind the chrome, so the acrylic
-   * elements have nothing to blur there and must stay opaque. Safe mode blocks
-   * hardware acceleration, so it ends up on the same path.
+   * Motion's duration-based springs, sampled at 20 steps into linear(), keyed
+   * by bounce. Their shape does not depend on the duration.
    */
-  _markAcrylicSupport() {
-    let supported = !Services.appinfo.inSafeMode;
+  springEasings: {
+    0: "linear(0, 0.079, 0.236, 0.403, 0.551, 0.671, 0.764, 0.833, 0.883, 0.919, 0.944, 0.962, 0.974, 0.983, 0.988, 0.992, 0.995, 0.997, 0.998, 0.998, 1)",
+    0.2: "linear(0, 0.079, 0.249, 0.438, 0.609, 0.748, 0.852, 0.923, 0.969, 0.995, 1.009, 1.014, 1.015, 1.013, 1.01, 1.008, 1.005, 1.003, 1.002, 1.001, 1)",
+    0.3: "linear(0, 0.096, 0.299, 0.521, 0.715, 0.861, 0.958, 1.014, 1.04, 1.046, 1.041, 1.032, 1.021, 1.013, 1.006, 1.002, 0.999, 0.998, 0.998, 0.998, 1)",
+    0.4: "linear(0, 0.121, 0.374, 0.64, 0.856, 0.998, 1.072, 1.095, 1.086, 1.062, 1.037, 1.016, 1.001, 0.994, 0.991, 0.992, 0.994, 0.996, 0.998, 1, 1)",
+  },
 
-    try {
-      supported &&= !window.windowUtils.layerManagerType.includes("Software");
-    } catch (e) {
-      // No widget associated with this window yet, assume hardware rendering.
-    }
-
-    if (!supported) {
-      document.documentElement.setAttribute("zen-no-acrylic", "true");
-    }
+  /**
+   * Runs element.animate() on one or more elements with the contract callers
+   * had from Motion: the result is a thenable that resolves on finish or
+   * cancel, complete() jumps to the end, and the last keyframe stays as inline
+   * style, even on elements that are not rendered. Pass `fill: "none"` for a pulse that ends where it started, so no
+   * inline style overrides the element's own :hover or :active rules.
+   * Pseudo-element animations keep filling until the caller cancels them.
+   * Animate only transform and opacity, so the compositor runs it.
+   *
+   * @param {Element|Iterable<Element>} elements
+   * @param {object} keyframes Keyframes as element.animate() takes them.
+   * @param {object} options element.animate() options in ms. `bounce` picks
+   *   one of springEasings, `delay` may be a function of the element's index.
+   */
+  animate(elements, keyframes, { bounce, delay = 0, ...options } = {}) {
+    elements = Element.isInstance(elements)
+      ? [elements]
+      : [...(elements ?? [])].filter(Boolean);
+    // The end values to leave inline, like Motion did. Written by hand
+    // because commitStyles() throws on elements that are not rendered.
+    const last = Array.isArray(keyframes)
+      ? { ...keyframes.at(-1) }
+      : Object.fromEntries(
+          Object.entries(keyframes).map(([name, value]) => [
+            name,
+            [value].flat().at(-1),
+          ])
+        );
+    delete last.offset;
+    delete last.easing;
+    delete last.composite;
+    const animations = elements.map((element, index) => {
+      const animation = element.animate(keyframes, {
+        easing: bounce === undefined ? "ease-out" : this.springEasings[bounce],
+        fill: "forwards",
+        ...options,
+        delay: typeof delay === "function" ? delay(index) : delay,
+        ...(gReduceMotion ? { duration: 0, delay: 0 } : {}),
+      });
+      if (
+        animation.effect.getTiming().fill === "forwards" &&
+        !options.pseudoElement
+      ) {
+        animation.finished.then(
+          () => {
+            for (const [name, value] of Object.entries(last)) {
+              if (name.startsWith("--")) {
+                element.style.setProperty(name, value);
+              } else {
+                element.style[name] = value;
+              }
+            }
+            animation.cancel();
+          },
+          () => {}
+        );
+      }
+      return animation;
+    });
+    const promise = Promise.all(
+      animations.map(animation => animation.finished.catch(() => {}))
+    );
+    return {
+      then: (onResolve, onReject) => promise.then(onResolve, onReject),
+      // Skip animations that already ended and cancelled themselves, since
+      // finish() would restart them and leave them filling for good.
+      complete: () =>
+        animations.forEach(animation => {
+          if (animation.playState !== "idle") {
+            animation.finish();
+          }
+        }),
+      cancel: () => animations.forEach(animation => animation.cancel()),
+    };
   },
 
   /**
    * Animate an element using Element.animate API.
-   * This is not using gZenUIManager.motion, because motion library has some issues
-   * with certain properties and we want to have a simple wrapper for that.
    *
    * @param {Element} element
    * @param {object} rawKeyframes
@@ -260,19 +315,19 @@ window.gZenUIManager = {
       }
       const image = button.querySelector("image");
       button.setAttribute("open", "true");
-      gZenUIManager.motion.animate(
+      gZenUIManager.animate(
         image,
         { transform: ["rotate(0deg)", "rotate(45deg)"] },
-        { duration: 0.2 }
+        { duration: 200 }
       );
       popup.addEventListener(
         "popuphidden",
         () => {
           button.removeAttribute("open");
-          gZenUIManager.motion.animate(
+          gZenUIManager.animate(
             image,
             { transform: ["rotate(45deg)", "rotate(0deg)"] },
-            { duration: 0.2 }
+            { duration: 200 }
           );
         },
         { once: true }
@@ -472,11 +527,13 @@ window.gZenUIManager = {
     const input = gURLBar;
     if (gURLBar.hasAttribute("breakout-extend") && !this._animatingSearchMode) {
       this._animatingSearchMode = true;
-      this.motion
-        .animate(input, { scale: [1, 0.98, 1] }, { duration: 0.25 })
-        .then(() => {
-          delete this._animatingSearchMode;
-        });
+      this.animate(
+        input,
+        { scale: [1, 0.98, 1] },
+        { duration: 250, fill: "none" }
+      ).then(() => {
+        delete this._animatingSearchMode;
+      });
       if (searchMode) {
         gURLBar.setAttribute("animate-searchmode", "true");
         this._animatingSearchModeTimeout = setTimeout(() => {
@@ -809,25 +866,19 @@ window.gZenUIManager = {
       if (Services.prefs.getBoolPref("ui.popup.disable_autohide")) {
         return;
       }
-      this.motion
-        .animate(
-          toast,
-          { opacity: [1, 0], scale: [1, 0.5] },
-          { duration: 0.2, bounce: 0 }
-        )
-        .then(() => {
-          toast.remove();
-          if (this._toastContainer.children.length === 0) {
-            this._toastContainer.setAttribute("hidden", true);
-          }
-        });
+      this.animate(
+        toast,
+        { opacity: [1, 0], transform: ["scale(1)", "scale(0.5)"] },
+        { duration: 200 }
+      ).then(() => {
+        toast.remove();
+        if (this._toastContainer.children.length === 0) {
+          this._toastContainer.setAttribute("hidden", true);
+        }
+      });
     };
     if (reused) {
-      await this.motion.animate(
-        toast,
-        { scale: 0.2 },
-        { duration: 0.1, bounce: 0 }
-      );
+      await this.animate(toast, { transform: "scale(0.2)" }, { duration: 100 });
     } else {
       toast.addEventListener("mouseover", () => {
         if (this._toastTimeouts[messageId]) {
@@ -847,10 +898,10 @@ window.gZenUIManager = {
     if (!toast.style.transform) {
       toast.style.transform = "scale(0)";
     }
-    await this.motion.animate(
+    await this.animate(
       toast,
-      { scale: 1 },
-      { type: "spring", bounce: 0.2, duration: 0.5 }
+      { transform: "scale(1)" },
+      { bounce: 0.2, duration: 500 }
     );
     if (this._toastTimeouts[messageId]) {
       clearTimeout(this._toastTimeouts[messageId]);
@@ -1074,9 +1125,7 @@ window.gZenVerticalTabsManager = {
       (gZenUIManager.testingEnabled && !gZenUIManager.profilingEnabled) ||
       !gZenStartup.isReady ||
       aItem.group?.hasAttribute("split-view-group") ||
-      window.gZenViewSplitter?.waitingForSplitTab ||
-      // Last, so windows that never animate never load Motion.
-      !gZenUIManager.motion
+      window.gZenViewSplitter?.waitingForSplitTab
     );
   },
 
@@ -1085,26 +1134,16 @@ window.gZenVerticalTabsManager = {
       return;
     }
 
-    const isLastItem = () => {
-      const visibleItems = gBrowser.tabContainer.ariaFocusableItems;
-      return visibleItems[visibleItems.length - 1] === aItem;
-    };
-
     try {
-      const itemSize = aItem.getBoundingClientRect().height;
-      const transform = `-${itemSize}px`;
-      const marginBottom = isLastItem() ? ["0px", "0px"] : [transform, "0px"];
-      // Hold the collapsed start state now so the item doesn't take its space
-      // for a frame, then start once its destination is settled.
-      aItem.style.marginBottom = marginBottom[0];
+      // Hold the start state now so the item doesn't show for a frame, then
+      // start once its destination is settled.
       aItem.style.opacity = "0";
       window.requestAnimationFrame(() => {
         if (!this._canAnimateItemOpen(aItem)) {
-          aItem.style.removeProperty("margin-bottom");
           aItem.style.removeProperty("opacity");
           return;
         }
-        this._startItemOpenAnimation(aItem, marginBottom);
+        this._startItemOpenAnimation(aItem);
       });
     } catch (e) {
       console.error(e);
@@ -1113,53 +1152,28 @@ window.gZenVerticalTabsManager = {
 
   /**
    * @param {Element} aItem
-   * @param {string[]} marginBottom Keyframes collapsing the item's space.
    */
-  _startItemOpenAnimation(aItem, marginBottom) {
+  _startItemOpenAnimation(aItem) {
     try {
-      gZenUIManager.motion
-        .animate(
-          aItem,
-          {
-            opacity: [0, 1],
-            transform: ["scale(0.95)", "scale(1)"],
-            marginBottom,
-          },
-          {
-            duration: 0.12,
-            easing: "easeOut",
-          }
-        )
-        .then(() => {})
-        .catch(err => {
-          console.error(err);
-        })
-        .finally(() => {
-          aItem.style.removeProperty("margin-bottom");
-          aItem.style.removeProperty("transform");
-          aItem.style.removeProperty("opacity");
-        });
-      const itemLabel =
-        aItem.querySelector(".tab-group-label-container") ||
-        aItem.querySelector(".tab-content");
-      gZenUIManager.motion
-        .animate(
-          itemLabel,
-          {
-            filter: ["blur(1px)", "blur(0px)"],
-          },
-          {
-            duration: 0.1,
-            easing: "easeOut",
-          }
-        )
-        .then(() => {})
-        .catch(err => {
-          console.error(err);
-        })
-        .finally(() => {
-          itemLabel.style.removeProperty("filter");
-        });
+      const { height } = aItem.getBoundingClientRect();
+      const below = this._itemsBelow(aItem);
+      if (below.length) {
+        gZenUIManager.animate(
+          below,
+          { transform: [`translateY(-${height}px)`, "translateY(0)"] },
+          { duration: 120, fill: "none" }
+        );
+      }
+      gZenUIManager.animate(
+        aItem,
+        {
+          opacity: [0, 1],
+          transform: ["scale(0.95)", "scale(1)"],
+        },
+        { duration: 120, fill: "none" }
+      );
+      // The running animation holds the start state from here on.
+      aItem.style.removeProperty("opacity");
     } catch (e) {
       console.error(e);
     }
@@ -1169,30 +1183,72 @@ window.gZenVerticalTabsManager = {
     if (
       aItem.hasAttribute("zen-essential") ||
       aItem.group?.hasAttribute("split-view-group") ||
-      gReduceMotion ||
-      !gZenUIManager.motion
+      gReduceMotion
     ) {
       return Promise.resolve();
     }
-    const height = window.windowUtils.getBoundsWithoutFlushing(aItem).height;
-    const visibleItems = gBrowser.tabContainer.ariaFocusableItems;
-    const isLastItem = visibleItems[visibleItems.length - 1] === aItem;
-    return gZenUIManager.motion.animate(
-      aItem,
-      {
-        opacity: [1, 0],
-        transform: ["scale(1)", "scale(0.95)"],
-        ...(isLastItem
-          ? {}
-          : {
-              marginBottom: [`0px`, `-${height}px`],
-            }),
-      },
-      {
-        duration: 0.1,
-        easing: "easeOut",
+    try {
+      const { height } = window.windowUtils.getBoundsWithoutFlushing(aItem);
+      const below = this._itemsBelow(aItem);
+      return Promise.all([
+        gZenUIManager.animate(
+          aItem,
+          {
+            opacity: [1, 0],
+            transform: ["scale(1)", "scale(0.95)"],
+          },
+          { duration: 100 }
+        ),
+        below.length &&
+          gZenUIManager.animate(
+            below,
+            { transform: ["translateY(0)", `translateY(-${height}px)`] },
+            { duration: 100 }
+          ),
+      ]).then(() => {
+        // The caller removes aItem in the same microtask checkpoint, so the
+        // items below take its place in the frame they lose their offset.
+        below.forEach(item => item.style.removeProperty("transform"));
+      });
+    } catch (e) {
+      // The caller removes the tab once this resolves, so it must resolve.
+      console.error(e);
+      return Promise.resolve();
+    }
+  },
+
+  /**
+   * The visible strip items below aItem: its following siblings at each level
+   * up to the space, so a folder moves with its tabs.
+   *
+   * @param {Element} aItem
+   * @returns {Element[]}
+   */
+  _itemsBelow(aItem) {
+    const space = aItem.closest("zen-workspace");
+    const { height } = window.windowUtils.getBoundsWithoutFlushing(aItem);
+    const items = [];
+    if (!space?.active || !height || aItem.hasAttribute("zen-essential")) {
+      return items;
+    }
+    for (let el = aItem; el.parentElement !== space; el = el.parentElement) {
+      for (
+        let next = el.nextElementSibling;
+        next;
+        next = next.nextElementSibling
+      ) {
+        const rect = window.windowUtils.getBoundsWithoutFlushing(next);
+        // ponytail: stops at the window's bottom edge, not the scroll box's;
+        // clip to the scroll box if long strips still animate unseen items.
+        if (rect.top > window.innerHeight) {
+          break;
+        }
+        if (rect.height) {
+          items.push(next);
+        }
       }
-    );
+    }
+    return items;
   },
 
   get actualWindowButtons() {
@@ -1732,14 +1788,12 @@ window.gZenVerticalTabsManager = {
           gBrowser.setTabTitle(this._tabEdited);
         }
 
-        gZenUIManager.motion.animate(
+        gZenUIManager.animate(
           this._tabEdited,
           {
             scale: [1, 0.98, 1],
           },
-          {
-            duration: 0.25,
-          }
+          { duration: 250, fill: "none" }
         );
       }
 

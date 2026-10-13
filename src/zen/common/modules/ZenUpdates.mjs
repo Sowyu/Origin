@@ -19,30 +19,15 @@ export async function playWindowSweepAnimation() {
     }
     appWrapper.appendChild(element);
     appWrapper.appendChild(elementBorder);
-    Promise.all([
-      gZenUIManager.motion.animate(
-        "#zen-update-animation",
-        {
-          top: ["100%", "-50%"],
-          opacity: [0.5, 1],
-        },
-        {
-          duration: 0.35,
-        }
-      ),
-      gZenUIManager.motion.animate(
-        "#zen-update-animation-border",
-        {
-          "--background-top": ["150%", "-50%"],
-        },
-        {
-          duration: 0.35,
-          delay: 0.08,
-        }
-      ),
-    ]).then(() => {
-      element.remove();
-      elementBorder.remove();
-    });
+    // The sweep runs as CSS keyframes, see zen-single-components.css. The
+    // border's highlight starts 80 ms later and ends last.
+    elementBorder.addEventListener(
+      "animationend",
+      () => {
+        element.remove();
+        elementBorder.remove();
+      },
+      { once: true }
+    );
   });
 }

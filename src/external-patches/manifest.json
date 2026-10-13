@@ -13,11 +13,6 @@
     "name": "Issue 15123"
   },
   {
-    "type": "phabricator",
-    "id": "D327914",
-    "name": "Backdrop filter reads web content"
-  },
-  {
     "type": "local",
     "path": "firefox/no_liquid_glass_icon.patch"
   },
@@ -33,26 +28,12 @@
   },
   {
     "type": "phabricator",
-    "id": "D312091",
-    "name": "Expose tiled attribute to all platforms"
-  },
-  {
-    "type": "phabricator",
     "id": "D298708",
     "name": "Issue 14990",
     "replaces": {
       "this._lastJsonLength = uncompressedBytes;": "this._lastJsonLength = uncompressedBytes.jsonLength;",
       "          jsonLengthHint,": "          lengthHint: jsonLengthHint,"
     }
-  },
-  {
-    "type": "phabricator",
-    "id": "D321446",
-    "name": "Issue 14710"
-  },
-  {
-    "type": "local",
-    "path": "firefox/override_cert_checks_temp.patch"
   },
   {
     "type": "phabricator",

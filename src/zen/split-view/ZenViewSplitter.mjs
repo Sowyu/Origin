@@ -6,6 +6,14 @@
 
 import { nsZenDOMOperatedFeature } from "chrome://browser/content/zen-components/ZenCommonUtils.mjs";
 
+// Where the drop target slides in from and out to, per drop side.
+const kDropEdgeOffscreen = {
+  left: "translateX(-100%)",
+  right: "translateX(100%)",
+  top: "translateY(-100%)",
+  bottom: "translateY(100%)",
+};
+
 class nsSplitLeafNode {
   /**
    * The percentage of the size of the parent the node takes up, dependent on parent direction this is either
@@ -493,18 +501,31 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
         break;
     }
 
-    this._finishAllAnimatingPromise = Promise.all([
-      gZenUIManager.motion.animate(gBrowser.tabbox, animateTabBox, {
-        duration: 0.1,
-        easing: "ease-out",
-      }),
-      gZenUIManager.motion.animate(this.fakeBrowser, animateFakeBrowser, {
-        duration: 0.1,
-        easing: "ease-out",
-      }),
-    ]);
+    // ponytail: the page snaps to its new size and only the drop target slides
+    // in, because padding and width run layout. Scale the page with a
+    // transform if the snap shows.
+    for (const [element, keyframes] of [
+      [gBrowser.tabbox, animateTabBox],
+      [this.fakeBrowser, animateFakeBrowser],
+    ]) {
+      for (const [property, [, value]] of Object.entries(keyframes)) {
+        element.style[property] = value;
+      }
+    }
+    this._finishAllAnimatingPromise = Promise.resolve(
+      gZenUIManager.animate(
+        this.fakeBrowser,
+        { opacity: [0, 1], transform: [kDropEdgeOffscreen[side], "none"] },
+        { duration: 100 }
+      )
+    );
+    const fakeBrowser = this.fakeBrowser;
     if (this._finishAllAnimatingPromise) {
       this._finishAllAnimatingPromise.then(() => {
+        if (this.fakeBrowser !== fakeBrowser) {
+          // The drag ended while the drop target slid in.
+          return;
+        }
         if (draggedTab !== oldTab) {
           draggedTab.linkedBrowser.docShellIsActive = false;
           draggedTab.linkedBrowser
@@ -524,7 +545,6 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
     if (!this._canDrop) {
       return;
     }
-    const panelsRect = gBrowser.tabbox.getBoundingClientRect();
     const fakeBrowserRect =
       this.fakeBrowser && this.fakeBrowser.getBoundingClientRect();
     if (
@@ -541,18 +561,6 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
     if (!this._hasAnimated || !this.fakeBrowser) {
       return;
     }
-    const panelsWidth = panelsRect.width;
-    const panelsHeight = panelsRect.height;
-    let numOfTabsToDivide = 2;
-    const currentView = this._data.find(group =>
-      group.tabs.includes(this._lastOpenedTab)
-    );
-    if (currentView) {
-      numOfTabsToDivide = currentView.tabs.length + 1;
-    }
-    const halfWidth = panelsWidth / numOfTabsToDivide;
-    const halfHeight = panelsHeight / numOfTabsToDivide;
-    const padding = ZenThemeModifier.elementSeparation;
     if (!this.fakeBrowser) {
       return;
     }
@@ -563,55 +571,15 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
       ...gBrowser.tabContainer.tabDragAndDrop.originalDragImageArgs
     );
     this._canDrop = false;
-    let animateTabBox = null;
-    let animateFakeBrowser = null;
-    switch (side) {
-      case "left":
-        animateTabBox = {
-          padding: [`0 0 0 ${halfWidth}px`, 0],
-        };
-        animateFakeBrowser = {
-          width: [`${halfWidth - padding}px`, 0],
-          margin: [`0 0 0 ${-halfWidth}px`, 0],
-        };
-        break;
-      case "right":
-        animateTabBox = {
-          padding: [`0 ${halfWidth}px 0 0`, 0],
-        };
-        animateFakeBrowser = {
-          width: [`${halfWidth - padding}px`, 0],
-        };
-        break;
-      case "top":
-        animateTabBox = {
-          padding: [`${halfHeight}px 0 0 0`, 0],
-        };
-        animateFakeBrowser = {
-          height: [`${halfHeight - padding}px`, 0],
-          margin: [`${-halfHeight}px 0 0 0`, 0],
-        };
-        break;
-      case "bottom":
-        animateTabBox = {
-          padding: [`0 0 ${halfHeight}px 0`, 0],
-        };
-        animateFakeBrowser = {
-          height: [`${halfHeight - padding}px`, 0],
-        };
-        break;
-    }
-
-    this._finishAllAnimatingPromise = Promise.all([
-      gZenUIManager.motion.animate(gBrowser.tabbox, animateTabBox, {
-        duration: 0.1,
-        easing: "ease-out",
-      }),
-      gZenUIManager.motion.animate(this.fakeBrowser, animateFakeBrowser, {
-        duration: 0.1,
-        easing: "ease-out",
-      }),
-    ]);
+    // The page keeps its split size until the drop target has slid out, then
+    // _maybeRemoveFakeBrowser() hands it back its full size.
+    this._finishAllAnimatingPromise = Promise.resolve(
+      gZenUIManager.animate(
+        this.fakeBrowser,
+        { opacity: [1, 0], transform: ["none", kDropEdgeOffscreen[side]] },
+        { duration: 100 }
+      )
+    );
     if (this._finishAllAnimatingPromise) {
       this._finishAllAnimatingPromise.then(() => {
         this._maybeRemoveFakeBrowser();
@@ -2323,18 +2291,18 @@ class nsZenViewSplitter extends nsZenDOMOperatedFeature {
   }
 
   animateBrowserDrop(browserContainer, callback = () => {}) {
-    gZenUIManager.motion
+    gZenUIManager
       .animate(
         browserContainer,
         {
-          scale: [0.97, 1],
+          transform: ["scale(0.97)", "scale(1)"],
           opacity: [0, 1],
         },
         {
-          type: "spring",
           bounce: 0.4,
-          duration: 0.2,
-          delay: 0.1,
+          duration: 200,
+          delay: 100,
+          fill: "backwards",
         }
       )
       .then(callback);
