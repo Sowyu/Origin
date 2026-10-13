@@ -14,11 +14,12 @@
 - name: browser.newtabpage.activity-stream.system.showWeather
   value: false
 
+# Origin: no wallpaper fetch at every launch (Remote Settings client) for a page it does not show.
 - name: browser.newtabpage.activity-stream.newtabWallpapers.enabled
-  value: true
+  value: false
 
 - name: browser.newtabpage.activity-stream.newtabWallpapers.v2.enabled
-  value: true
+  value: false
 
 - name: browser.translations.newSettingsUI.enable
   value: true

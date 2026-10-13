@@ -3,8 +3,8 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 # Firefox's AI features that Zen's prefs/firefox/ai.yaml leaves on. Translations run in their own
-# engine and keep working (docs/research/firefox-prefs-2026-10-13.md, section 2). Firefox's single
-# "Block AI enhancements" switch would block Translations too, so these are separate.
+# engine and keep working (docs/research/firefox-prefs-2026-10-13.md, section 2). These per-feature
+# prefs are the runtime gates. The global switch lives in prefs/origin/firefox.yaml.
 
 # Smart tab groups name and suggest groups with a local model.
 - name: browser.tabs.groups.smart.enabled

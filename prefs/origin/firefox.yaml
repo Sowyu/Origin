@@ -1,0 +1,86 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# Firefox settings Origin changes. Sources are in docs/research/firefox-prefs-2026-10-13.md and
+# docs/research/newtab-2026-10-13.md.
+
+# AI: "blocked" is the global AI switch. At runtime it blocks Smart Window (AIWindow.sys.mjs:1502-1507)
+# and hides the AI menu item (panelUI.js:1235). The other features read their own prefs
+# (prefs/origin/ai.yaml). Translations reads only browser.translations.enable
+# (TranslationsFeature.sys.mjs:87-89), so it keeps working.
+- name: browser.ai.control.default
+  value: blocked
+
+# Without this, the settings page shows Translations as blocked while the global switch is blocked
+# (aiFeatures.mjs:477-487). "available" is Translations' normal state (TranslationsFeature.sys.mjs:133).
+- name: browser.ai.control.translations
+  value: available
+
+# Usage reporting is a second upload switch next to healthreport.uploadEnabled (all.js:3764).
+- name: datareporting.usage.uploadEnabled
+  value: false
+
+# No sponsored stories on the new tab page.
+- name: browser.newtabpage.activity-stream.showSponsored
+  value: false
+
+# No sponsored top sites on the new tab page.
+- name: browser.newtabpage.activity-stream.showSponsoredTopSites
+  value: false
+
+# Firefox checks IPv4 and IPv6 reachability with requests to Mozilla after startup and on every
+# network change (all.js:3269). Only the DNS code reads the result.
+- name: network.connectivity-service.enabled
+  value: false
+
+# On macOS, tab unloading under memory pressure ships off outside Nightly (firefox.js:1250-1253).
+# 3 = unload tabs, then send the internal memory-pressure notice (AvailableMemoryWatcherMac.cpp:50-57).
+# It acts only when macOS reports critical memory pressure. browser.tabs.unloadOnLowMemory is
+# already true on macOS (firefox.js:1214).
+- name: browser.lowMemoryResponseMask
+  value: 3
+
+# Quiet new tab set (variant quiet-newtab in scripts/perf/variants.json). A blank homepage means
+# a new window loads no about:home.
+- name: browser.startup.homepage
+  value: about:blank
+
+- name: browser.newtabpage.enabled
+  value: false
+
+- name: browser.newtabpage.activity-stream.feeds.weatherfeed
+  value: false
+
+- name: browser.newtabpage.activity-stream.feeds.stocksfeed
+  value: false
+
+- name: browser.newtabpage.activity-stream.feeds.adsfeed
+  value: false
+
+- name: browser.newtabpage.activity-stream.feeds.inferredpersonalizationfeed
+  value: false
+
+- name: browser.newtabpage.activity-stream.feeds.smartshortcutsfeed
+  value: false
+
+- name: browser.newtabpage.activity-stream.feeds.newtabattributionfeed
+  value: false
+
+- name: browser.newtabpage.activity-stream.feeds.listsfeed
+  value: false
+
+- name: browser.newtabpage.activity-stream.feeds.privacyfeed
+  value: false
+
+- name: browser.newtabpage.activity-stream.feeds.recentsearchesfeed
+  value: false
+
+- name: browser.newtabpage.activity-stream.feeds.pictureofthedayfeed
+  value: false
+
+- name: browser.newtabpage.activity-stream.feeds.timerfeed
+  value: false
+
+- name: browser.newtabpage.activity-stream.feeds.webnotificationsfeed
+  value: false
