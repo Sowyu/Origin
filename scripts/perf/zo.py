@@ -156,9 +156,12 @@ def quiet_wait(max_load=3.5, max_wait=900, settle=20):
     start, quiet_since = time.time(), None
     while True:
         if os.path.exists(PAUSE):
-            open(PAUSED, "w").write(str(os.getpid()))
             log("held by", PAUSE)
             while os.path.exists(PAUSE):
+                # Re-assert the answer every pass: a hold that starts right after another one
+                # removes the old answer before it waits for a new one.
+                if not os.path.exists(PAUSED):
+                    open(PAUSED, "w").write(str(os.getpid()))
                 time.sleep(5)
             if os.path.exists(PAUSED):
                 os.remove(PAUSED)
