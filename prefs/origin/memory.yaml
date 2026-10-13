@@ -12,3 +12,9 @@
 # Firefox loads the next new tab page in the background before you open it.
 - name: browser.newtab.preload
   value: false
+
+# Spare IOSurfaces the macOS native compositor keeps for reuse (Firefox keeps 25).
+# Together with zen.widget.macos.release-idle-tile-buffers this freed 31 MB after
+# scrolling on a 1080p screen for no measurable power (batch membuf-1).
+- name: gfx.webrender.compositor.surface-pool-size
+  value: 4

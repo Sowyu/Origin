@@ -4,10 +4,12 @@
 
 # Return a compositor tile's spare IOSurfaces to the surface pool once the
 # tile has gone 10 composites without a redraw, so a still tile holds only its
-# front buffer. Off until measured (docs/research/gpu-memory-retina-2026-10-13.md,
-# option 3). Read on the render thread in RenderCompositorNative, hence atomic.
+# front buffer (docs/research/gpu-memory-retina-2026-10-13.md, option 3). With the
+# surface pool at 4 (prefs/origin/memory.yaml) it freed 31 MB after scrolling on a
+# 1080p screen for no measurable power (batch membuf-1, 2026-10-14). Read on the
+# render thread in RenderCompositorNative, hence atomic.
 - name: zen.widget.macos.release-idle-tile-buffers
-  value: false
+  value: true
   cpptype: RelaxedAtomicBool
   mirror: always
   type: static
