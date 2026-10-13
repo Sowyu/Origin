@@ -108,5 +108,19 @@
     "ui": "zen",
     "template": "origin-v3",
     "note": "pre-release 5: idle tile buffers and a surface pool of 4, loops at their own pace, the theme picker built on first open; fixes A and B in the build but off; thin LTO and PGO, signed"
+  },
+  "origin-release-6": {
+    "app": "builds/origin-release-6/Origin.app",
+    "engine": "gecko",
+    "ui": "zen",
+    "template": "origin-v3",
+    "note": "pre-release 6: the updater on, with Origin's MAR keys and the GitHub Pages feed; fixes A and B removed; thin LTO and PGO, signed"
+  },
+  "origin-6-old": {
+    "app": "builds/origin-6-old/Origin.app",
+    "engine": "gecko",
+    "ui": "zen",
+    "template": "origin-v3",
+    "note": "the build just before pre-release 6 (build 20261014003115), kept to test that it updates itself to pre-release 6"
   }
 }
