@@ -101,5 +101,12 @@
     "ui": "zen",
     "template": "origin-v3",
     "note": "test build for pre-release 5: pre-release 4 plus fix A, fix B and the idle tile buffers, each off by pref; thin LTO and PGO, signed"
+  },
+  "origin-release-5": {
+    "app": "builds/origin-release-5/Origin.app",
+    "engine": "gecko",
+    "ui": "zen",
+    "template": "origin-v3",
+    "note": "pre-release 5: idle tile buffers and a surface pool of 4, loops at their own pace, the theme picker built on first open; fixes A and B in the build but off; thin LTO and PGO, signed"
   }
 }
