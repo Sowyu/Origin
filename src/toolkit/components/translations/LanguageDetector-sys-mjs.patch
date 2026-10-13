@@ -1,0 +1,32 @@
+diff --git a/toolkit/components/translations/LanguageDetector.sys.mjs b/toolkit/components/translations/LanguageDetector.sys.mjs
+index 65fce303294aa73043b9360c718e6740e2b38c10..27552ae9795fc80223dc7c4954b4210658e4922b 100644
+--- a/toolkit/components/translations/LanguageDetector.sys.mjs
++++ b/toolkit/components/translations/LanguageDetector.sys.mjs
+@@ -26,7 +26,7 @@ class WorkerManager {
+   //
+   // 1.5MB. This is the approximate string length that forces heap growth for a 2MB heap.
+   LARGE_STRING = 1.5 * 1024 * 1024;
+-  IDLE_TIMEOUT = 10_000;
++  IDLE_TIMEOUT = 60_000;
+ 
+   /**
+    * Resolvers for the detection queue.
+@@ -66,15 +66,9 @@ class WorkerManager {
+ 
+     // We have our asynchronous result from the worker.
+     //
+-    // Determine if our input was large enough to trigger heap growth,
+-    // or if we're already waiting to destroy the worker when it's
+-    // idle. If so, schedule termination after the idle timeout.
+-    if (
+-      options.text.length >= this.LARGE_STRING ||
+-      this.idleTimeoutId != null
+-    ) {
+-      this.flushWorker();
+-    }
++    // Origin: terminate the worker once it has been idle, whatever the input
++    // size, so its heap (16 MB seen) does not stay for the whole session.
++    this.flushWorker();
+ 
+     return result;
+   }

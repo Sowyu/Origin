@@ -3,10 +3,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Unloads tabs that sat in the background for origin.tabs.unload-after-minutes,
-// and after origin.memory.trim-after-idle-minutes without user input sends one
-// memory-pressure notification so WebRender and the content processes drop their
-// caches (docs/research/gpu-memory-2026-10-13.md, candidate 1). WebRender only
-// evicts while it draws, so an idle browser otherwise keeps its peak caches.
+// and after origin.memory.trim-after-idle-minutes without user input, or with
+// another app in front, sends one memory-pressure notification so WebRender and
+// the content processes drop their caches (docs/research/gpu-memory-2026-10-13.md,
+// candidate 1). WebRender only evicts while it draws, so an idle browser otherwise
+// keeps its peak caches.
 // One timer for the whole app. Each window's ZenPreloadedScripts.js calls init(),
 // and only the first call starts it.
 
@@ -40,6 +41,8 @@ export const OriginTabUnloader = {
   _sessionStart: 0,
   // Date.now() of the last trim. The next trim waits for input after this.
   _trimmedAt: 0,
+  // Date.now() when a tick first found no Origin window active, 0 while one is.
+  _inactiveSince: 0,
 
   init() {
     if (this._initialized) {
@@ -132,13 +135,26 @@ export const OriginTabUnloader = {
     return lazy.idleService.idleTime;
   },
 
+  // Milliseconds since a tick first found no Origin window active, so another app
+  // is in front. A hidden window keeps the caches a trim drops until it shows again.
+  // ponytail: measured on the minute tick, so up to a minute late; listen for
+  // activate events if the trim needs to be exact. Tests replace this.
+  _inactiveMs(now) {
+    if (Services.focus.activeWindow) {
+      this._inactiveSince = 0;
+      return 0;
+    }
+    this._inactiveSince ||= now;
+    return now - this._inactiveSince;
+  },
+
   trimIfIdle() {
     if (this._trimMinutes <= 0 || Services.startup.shuttingDown) {
       return;
     }
     const now = Date.now();
-    const idleMs = this._userIdleMs();
-    // Without input since the last trim, the caches are still small.
+    const idleMs = Math.max(this._userIdleMs(), this._inactiveMs(now));
+    // Away since the last trim, the caches are still small.
     if (idleMs < this._trimMinutes * 60 * 1000 || now - idleMs < this._trimmedAt) {
       return;
     }

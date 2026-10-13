@@ -79,7 +79,18 @@ add_task(async function test_trim_once_per_idle_period() {
   await OriginTabUnloader._tick();
   is(trims, 1, "A second tick in the same idle period sends none");
 
+  // The user works in another app: input continues, but no Origin window is active.
+  const { _inactiveMs } = OriginTabUnloader;
+  OriginTabUnloader._userIdleMs = () => 0;
+  OriginTabUnloader._inactiveMs = () => 5 * 60 * 1000;
+  OriginTabUnloader._trimmedAt = 0;
+  await OriginTabUnloader._tick();
+  is(trims, 2, "Five minutes behind another app send one heap-minimize");
+  await OriginTabUnloader._tick();
+  is(trims, 2, "A second tick behind the same app sends none");
+
   OriginTabUnloader._userIdleMs = _userIdleMs;
+  OriginTabUnloader._inactiveMs = _inactiveMs;
   OriginTabUnloader._trimmedAt = _trimmedAt;
   Services.obs.removeObserver(observer, "memory-pressure");
   await SpecialPowers.popPrefEnv();

@@ -11,9 +11,13 @@
 - name: origin.tabs.unload-essentials
   value: false
 
-# On the same minute tick, after this many minutes without user input, send one
-# memory-pressure notification so WebRender and the content processes drop their
-# caches. Skipped while a tab plays media or shares camera, microphone or screen.
-# 0 turns it off. Off until the harness measures it (variant idle-trim-1min).
+# On the same minute tick, after this many minutes without user input or with another
+# app in front, send one memory-pressure notification so WebRender and the content
+# processes drop their caches. Skipped while a tab plays media or shares camera,
+# microphone or screen. The cost: Back reloads pages instead of restoring them from
+# the back-forward cache, and the window redraws once on return. On the user's
+# MacBook, about:memory's "Minimize memory usage", which sends this notification
+# three times, freed 79 of 1,300 MB with the window in front (2026-10-13). 0 turns
+# it off.
 - name: origin.memory.trim-after-idle-minutes
-  value: 0
+  value: 10

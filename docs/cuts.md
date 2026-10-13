@@ -80,7 +80,9 @@ Smallest fixes from `docs/research/zen-hot-paths-2026-10-13.md`, not measured ye
 
 ## Added, not cut
 
-- Automatic tab unloading (`src/zen/tabs/OriginTabUnloader.sys.mjs`): a background tab unloads after 10 minutes, set by `origin.tabs.unload-after-minutes` (0 turns it off). The selected tab, split view panes and tabs with media or calls stay loaded, and Essentials stay unless `origin.tabs.unload-essentials` is true.
+- Automatic tab unloading (`src/zen/tabs/OriginTabUnloader.sys.mjs`): off since 2026-10-13, because the user switches between many tabs all day. `origin.tabs.unload-after-minutes` turns it on: a background tab then unloads after that many minutes. The selected tab, split view panes and tabs with media or calls stay loaded, and Essentials stay unless `origin.tabs.unload-essentials` is true.
+- Memory trim (same file): after 10 minutes without input or with another app in front, one memory-pressure notification drops WebRender's and the pages' caches (`origin.memory.trim-after-idle-minutes`, 0 turns it off). It skips while media plays or a call runs. Back then reloads pages instead of using the back-forward cache.
+- Translations' language detector (`src/toolkit/components/translations/LanguageDetector-sys-mjs.patch`): its worker stops after a minute without page loads instead of living for the session. The user's report showed it at 17.5 MB.
 - Memory prefs (`prefs/origin/memory.yaml`): no spare content processes and no preloaded new tab page.
 - Background prefs (`prefs/origin/background.yaml`): no Nimbus rollouts and no captive portal check, because macOS shows its own Wi-Fi login sheet.
 - Startup helpers cut from `BrowserComponents.manifest`: Firefox's IP Protection, link preview and content relevancy no longer start at launch, and their prefs (`browser.ipProtection.enabled`, `browser.ml.linkPreview.enabled`) are locked off in `prefs/origin/startup.yaml` and `prefs/firefox/ai.yaml`.
