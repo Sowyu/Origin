@@ -1,8 +1,16 @@
 diff --git a/widget/cocoa/nsCocoaWindow.mm b/widget/cocoa/nsCocoaWindow.mm
-index 887e4c052d5dd2b73d4c2059463529fb4b09dcab..36da18e19018b1b216576c299f938e75093546d3 100644
+index e467ce48f523859aaff26023633d4d2d3978818f..f159be8c8c88ad745f081a0a4ee0b4db64f4da52 100644
 --- a/widget/cocoa/nsCocoaWindow.mm
 +++ b/widget/cocoa/nsCocoaWindow.mm
-@@ -86,6 +86,8 @@
+@@ -73,6 +73,7 @@
+ #include "qcms.h"
+ 
+ #include <algorithm>
++#import <QuartzCore/QuartzCore.h>
+ #include "mozilla/AutoRestore.h"
+ #include "mozilla/BasicEvents.h"
+ #include "mozilla/Maybe.h"
+@@ -86,6 +87,8 @@
  #include "mozilla/StaticPrefs_gfx.h"
  #include "mozilla/StaticPrefs_ui.h"
  #include "mozilla/StaticPrefs_widget.h"
@@ -11,7 +19,7 @@ index 887e4c052d5dd2b73d4c2059463529fb4b09dcab..36da18e19018b1b216576c299f938e75
  #include "mozilla/WritingModes.h"
  #include "mozilla/dom/Document.h"
  #include "mozilla/layers/CompositorBridgeChild.h"
-@@ -1332,6 +1334,110 @@ - (NSRect)_opaqueRectForWindowMoveWhenInTitlebar {
+@@ -1332,6 +1335,523 @@ - (NSRect)_opaqueRectForWindowMoveWhenInTitlebar {
  }
  @end
  
@@ -76,6 +84,406 @@ index 887e4c052d5dd2b73d4c2059463529fb4b09dcab..36da18e19018b1b216576c299f938e75
 +}
 +@end
 +
++// ponytail: blur, tint and saturation are eyeballed against HUDWindow, tune
++// them from a screenshot next to the real material.
++static constexpr CGFloat kZenFakeBlurDownscale = 8;
++static constexpr CGFloat kZenFakeBlurRadius = 30;  // points
++static constexpr CGFloat kZenFakeBlurSaturation = 1.6;
++static constexpr CGFloat kZenFakeBlurTintAlpha = 0.6;
++
++static NSString* const kZenBlurredWallpaperReady = @"ZenBlurredWallpaperReady";
++
++@interface ZenBlurredWallpaper : NSObject {
++ @public
++  NSURL* mURL;
++  NSArray* mLayout;
++  NSSize mSize;
++  bool mDark;
++  bool mPending;
++  CGImageRef mImage;
++}
++@end
++
++@implementation ZenBlurredWallpaper
++- (void)dealloc {
++  [mURL release];
++  [mLayout release];
++  CGImageRelease(mImage);
++  [super dealloc];
++}
++@end
++
++// Keyed by display ID, one entry per screen. Main thread only.
++static NSMutableDictionary<NSNumber*, ZenBlurredWallpaper*>* sZenWallpapers;
++
++// Lays the wallpaper out the way the desktop does, at 1/kZenFakeBlurDownscale
++// of the screen's pixel size, then blurs and tints it. Runs off the main
++// thread, so it touches no AppKit object.
++static CGImageRef ZenCreateBlurredWallpaper(NSURL* aURL, NSUInteger aScaling,
++                                            bool aClip, CIColor* aFillColor,
++                                            NSSize aSize, CGFloat aScale,
++                                            CGColorSpaceRef aColorSpace,
++                                            bool aDark) {
++  CGImageSourceRef source = CGImageSourceCreateWithURL((CFURLRef)aURL, nullptr);
++  if (!source) {
++    return nullptr;
++  }
++  auto releaseSource = MakeScopeExit([&] { CFRelease(source); });
++  // A dynamic wallpaper holds several images and picks one by time or
++  // appearance.
++  if (CGImageSourceGetCount(source) != 1) {
++    return nullptr;
++  }
++  NSDictionary* properties = [(NSDictionary*)CGImageSourceCopyPropertiesAtIndex(
++      source, 0, nullptr) autorelease];
++  CGFloat imageWidth =
++      [properties[(NSString*)kCGImagePropertyPixelWidth] doubleValue];
++  CGFloat imageHeight =
++      [properties[(NSString*)kCGImagePropertyPixelHeight] doubleValue];
++  if ([properties[(NSString*)kCGImagePropertyOrientation] intValue] >= 5) {
++    std::swap(imageWidth, imageHeight);
++  }
++  if (imageWidth < 1 || imageHeight < 1) {
++    return nullptr;
++  }
++
++  CGFloat screenWidth = aSize.width;
++  CGFloat screenHeight = aSize.height;
++  CGRect canvas =
++      CGRectMake(0, 0, ceil(screenWidth / kZenFakeBlurDownscale),
++                 ceil(screenHeight / kZenFakeBlurDownscale));
++  CGFloat toCanvas = canvas.size.width / screenWidth;
++
++  CGFloat fit = std::min(screenWidth / imageWidth, screenHeight / imageHeight);
++  CGFloat fill = std::max(screenWidth / imageWidth, screenHeight / imageHeight);
++  CGFloat scaleX, scaleY;
++  switch (aScaling) {
++    case NSImageScaleAxesIndependently:
++      scaleX = screenWidth / imageWidth;
++      scaleY = screenHeight / imageHeight;
++      break;
++    case NSImageScaleNone:
++      scaleX = scaleY = 1;
++      break;
++    case NSImageScaleProportionallyDown:
++      scaleX = scaleY = std::min<CGFloat>(aClip ? fill : fit, 1);
++      break;
++    default:
++      scaleX = scaleY = aClip ? fill : fit;
++      break;
++  }
++  CGFloat width = imageWidth * scaleX * toCanvas;
++  CGFloat height = imageHeight * scaleY * toCanvas;
++
++  NSDictionary* thumbnailOptions = @{
++    (NSString*)kCGImageSourceCreateThumbnailFromImageAlways : @YES,
++    (NSString*)kCGImageSourceCreateThumbnailWithTransform : @YES,
++    (NSString*)kCGImageSourceThumbnailMaxPixelSize :
++        @(std::max<CGFloat>(ceil(std::max(width, height)), 1)),
++  };
++  CGImageRef thumbnail = CGImageSourceCreateThumbnailAtIndex(
++      source, 0, (CFDictionaryRef)thumbnailOptions);
++  if (!thumbnail) {
++    return nullptr;
++  }
++  auto releaseThumbnail = MakeScopeExit([&] { CGImageRelease(thumbnail); });
++
++  CGFloat tint = aDark ? 0.12 : 0.96;
++  CIImage* image = [CIImage imageWithCGImage:thumbnail];
++  image = [image
++      imageByApplyingTransform:CGAffineTransformMake(
++                                   width / CGFloat(CGImageGetWidth(thumbnail)),
++                                   0, 0,
++                                   height / CGFloat(CGImageGetHeight(thumbnail)),
++                                   (canvas.size.width - width) / 2,
++                                   (canvas.size.height - height) / 2)];
++  image = [[image imageByCompositingOverImage:[CIImage imageWithColor:aFillColor]]
++      imageByCroppingToRect:canvas];
++  image = [[image imageByClampingToExtent]
++      imageByApplyingFilter:@"CIGaussianBlur"
++        withInputParameters:@{
++          kCIInputRadiusKey : @(kZenFakeBlurRadius * aScale * toCanvas)
++        }];
++  image = [image
++      imageByApplyingFilter:@"CIColorControls"
++        withInputParameters:@{kCIInputSaturationKey : @(kZenFakeBlurSaturation)}];
++  image = [[CIImage imageWithColor:[CIColor colorWithRed:tint
++                                                   green:tint
++                                                    blue:tint
++                                                   alpha:kZenFakeBlurTintAlpha]]
++      imageByCompositingOverImage:image];
++
++  CIContext* context = [CIContext contextWithOptions:@{
++    kCIContextUseSoftwareRenderer : @YES,
++    kCIContextCacheIntermediates : @NO,
++  }];
++  return [context createCGImage:image
++                       fromRect:canvas
++                         format:kCIFormatRGBA8
++                     colorSpace:aColorSpace];
++}
++
++// Returns the screen's blurred wallpaper, owned by the cache, or null. Sets
++// aPending while a new one is being made; kZenBlurredWallpaperReady follows.
++static CGImageRef ZenGetBlurredWallpaper(NSScreen* aScreen, bool aDark,
++                                         bool* aPending) {
++  *aPending = false;
++  NSNumber* display = aScreen.deviceDescription[@"NSScreenNumber"];
++  NSWorkspace* workspace = NSWorkspace.sharedWorkspace;
++  NSURL* url = aScreen ? [workspace desktopImageURLForScreen:aScreen] : nil;
++  // An aerial wallpaper moves, so no still copy matches it.
++  if (!display || !url.isFileURL ||
++      [url.path containsString:@"/com.apple.wallpaper/aerials/"]) {
++    return nullptr;
++  }
++  NSDictionary* options = [workspace desktopImageOptionsForScreen:aScreen];
++  NSNumber* scaling = options[NSWorkspaceDesktopImageScalingKey];
++  NSNumber* clipping = options[NSWorkspaceDesktopImageAllowClippingKey];
++  NSColor* fill = [options[NSWorkspaceDesktopImageFillColorKey]
++      colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
++  // Only what the layout uses, so a fresh but equal options dictionary never
++  // starts another decode.
++  NSArray* layout = @[
++    scaling ? scaling : @(NSImageScaleProportionallyUpOrDown),
++    @(!clipping || clipping.boolValue), @(fill ? fill.redComponent : 0),
++    @(fill ? fill.greenComponent : 0), @(fill ? fill.blueComponent : 0)
++  ];
++  CGFloat scale = aScreen.backingScaleFactor;
++  NSSize size = NSMakeSize(aScreen.frame.size.width * scale,
++                           aScreen.frame.size.height * scale);
++
++  if (!sZenWallpapers) {
++    sZenWallpapers = [[NSMutableDictionary alloc] init];
++  }
++  NSArray* displays =
++      [NSScreen.screens valueForKeyPath:@"deviceDescription.NSScreenNumber"];
++  for (NSNumber* key in sZenWallpapers.allKeys) {
++    if (![displays containsObject:key]) {
++      [sZenWallpapers removeObjectForKey:key];
++    }
++  }
++
++  ZenBlurredWallpaper* entry = sZenWallpapers[display];
++  if (entry && entry->mDark == aDark && NSEqualSizes(entry->mSize, size) &&
++      [entry->mURL isEqual:url] && [entry->mLayout isEqual:layout]) {
++    *aPending = entry->mPending;
++    return entry->mImage;
++  }
++
++  entry = [[[ZenBlurredWallpaper alloc] init] autorelease];
++  entry->mURL = [url retain];
++  entry->mLayout = [layout retain];
++  entry->mSize = size;
++  entry->mDark = aDark;
++  entry->mPending = true;
++  sZenWallpapers[display] = entry;
++  *aPending = true;
++
++  CIColor* fillColor = [CIColor colorWithRed:[layout[2] doubleValue]
++                                       green:[layout[3] doubleValue]
++                                        blue:[layout[4] doubleValue]];
++  NSUInteger scalingMode = [layout[0] unsignedIntegerValue];
++  bool clip = [layout[1] boolValue];
++  CGColorSpaceRef colorSpace = aScreen.colorSpace.CGColorSpace;
++  if (!colorSpace ||
++      CGColorSpaceGetModel(colorSpace) != kCGColorSpaceModelRGB) {
++    colorSpace = NSColorSpace.sRGBColorSpace.CGColorSpace;
++  }
++  CGColorSpaceRetain(colorSpace);
++  // The blocks retain the Objective-C objects they use.
++  dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
++    CGImageRef image;
++    @autoreleasepool {
++      image = ZenCreateBlurredWallpaper(url, scalingMode, clip, fillColor, size,
++                                        scale, colorSpace, aDark);
++    }
++    CGColorSpaceRelease(colorSpace);
++    dispatch_async(dispatch_get_main_queue(), ^{
++      if (sZenWallpapers[display] != entry) {
++        CGImageRelease(image);
++        return;
++      }
++      entry->mImage = image;
++      entry->mPending = false;
++      [NSNotificationCenter.defaultCenter
++          postNotificationName:kZenBlurredWallpaperReady
++                        object:nil];
++    });
++  });
++  return nullptr;
++}
++
++// The browser window's content view when zen.widget.macos.window-fake-blur is
++// on: an opaque layer that shows the blurred wallpaper lined up with the real
++// one, so the window needs no NSVisualEffectView. It hosts the real material
++// when the wallpaper can't be read.
++@interface ZenFakeBlurView : NSView {
++  CALayer* mWallpaperLayer;
++  ZenWindowMaterialView* mMaterialView;
++}
++@end
++
++@implementation ZenFakeBlurView
++- (instancetype)initWithFrame:(NSRect)aRect {
++  if ((self = [super initWithFrame:aRect])) {
++    self.wantsLayer = YES;
++    mWallpaperLayer = [[CALayer alloc] init];
++    mWallpaperLayer.opaque = YES;
++    mWallpaperLayer.hidden = YES;
++    // Keeps it below the layers of the subviews.
++    mWallpaperLayer.zPosition = -1;
++    NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
++    for (NSNotificationName name in @[
++           NSApplicationDidBecomeActiveNotification,
++           NSApplicationDidChangeScreenParametersNotification,
++           kZenBlurredWallpaperReady
++         ]) {
++      [center addObserver:self
++                 selector:@selector(wallpaperChanged:)
++                     name:name
++                   object:nil];
++    }
++    center = NSWorkspace.sharedWorkspace.notificationCenter;
++    for (NSNotificationName name in @[
++           NSWorkspaceActiveSpaceDidChangeNotification,
++           NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification
++         ]) {
++      [center addObserver:self
++                 selector:@selector(wallpaperChanged:)
++                     name:name
++                   object:nil];
++    }
++  }
++  return self;
++}
++
++- (void)dealloc {
++  [NSNotificationCenter.defaultCenter removeObserver:self];
++  [NSWorkspace.sharedWorkspace.notificationCenter removeObserver:self];
++  [mWallpaperLayer release];
++  [mMaterialView release];
++  [super dealloc];
++}
++
++- (BOOL)isOpaque {
++  return !mMaterialView;
++}
++
++- (void)viewWillMoveToWindow:(NSWindow*)aWindow {
++  if (self.window) {
++    [NSNotificationCenter.defaultCenter removeObserver:self
++                                                  name:nil
++                                                object:self.window];
++  }
++  [super viewWillMoveToWindow:aWindow];
++}
++
++- (void)viewDidMoveToWindow {
++  [super viewDidMoveToWindow];
++  NSWindow* window = self.window;
++  if (!window) {
++    return;
++  }
++  if (!mWallpaperLayer.superlayer) {
++    [self.layer addSublayer:mWallpaperLayer];
++  }
++  NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
++  for (NSNotificationName name in
++       @[ NSWindowDidMoveNotification, NSWindowDidResizeNotification ]) {
++    [center addObserver:self
++               selector:@selector(windowMoved:)
++                   name:name
++                 object:window];
++  }
++  for (NSNotificationName name in @[
++         NSWindowDidChangeScreenNotification,
++         NSWindowDidBecomeMainNotification, NSWindowDidResignMainNotification
++       ]) {
++    [center addObserver:self
++               selector:@selector(wallpaperChanged:)
++                   name:name
++                 object:window];
++  }
++  [self wallpaperChanged:nil];
++}
++
++- (void)viewDidChangeEffectiveAppearance {
++  [super viewDidChangeEffectiveAppearance];
++  [self wallpaperChanged:nil];
++}
++
++- (void)viewDidChangeBackingProperties {
++  [super viewDidChangeBackingProperties];
++  [self wallpaperChanged:nil];
++}
++
++- (NSScreen*)wallpaperScreen {
++  NSScreen* screen = self.window.screen;
++  return screen ? screen : NSScreen.mainScreen;
++}
++
++- (void)wallpaperChanged:(NSNotification*)aNotification {
++  NSWindow* window = self.window;
++  if (!window) {
++    return;
++  }
++  bool dark = [[self.effectiveAppearance bestMatchFromAppearancesWithNames:@[
++    NSAppearanceNameAqua, NSAppearanceNameDarkAqua
++  ]] isEqualToString:NSAppearanceNameDarkAqua];
++  bool reduce =
++      NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceTransparency;
++  bool pending = false;
++  CGImageRef image =
++      reduce ? nullptr
++             : ZenGetBlurredWallpaper([self wallpaperScreen], dark, &pending);
++  if (pending) {
++    return;
++  }
++
++  if (!reduce && !image && !mMaterialView) {
++    mMaterialView = [[ZenWindowMaterialView alloc] initWithFrame:self.bounds];
++    mMaterialView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
++    [self addSubview:mMaterialView positioned:NSWindowBelow relativeTo:nil];
++  } else if ((reduce || image) && mMaterialView) {
++    [mMaterialView removeFromSuperview];
++    [mMaterialView release];
++    mMaterialView = nil;
++  }
++
++  // Like the material, inactive windows and Reduce Transparency get a plain
++  // window colour.
++  bool flat = reduce || (StaticPrefs::zen_view_grey_out_inactive_windows() &&
++                         !window.isMainWindow);
++  CGFloat grey = dark ? 50.0 / 255 : 236.0 / 255;
++  [CATransaction begin];
++  [CATransaction setDisableActions:YES];
++  self.layer.backgroundColor =
++      mMaterialView
++          ? nullptr
++          : [NSColor colorWithSRGBRed:grey green:grey blue:grey alpha:1].CGColor;
++  mWallpaperLayer.contents = (id)image;
++  mWallpaperLayer.hidden = !image || flat;
++  [CATransaction commit];
++  [self windowMoved:nil];
++}
++
++// Places the screen-sized wallpaper layer at the screen's position relative to
++// the window. This only moves a layer, Gecko paints nothing.
++- (void)windowMoved:(NSNotification*)aNotification {
++  NSWindow* window = self.window;
++  if (!window || mWallpaperLayer.hidden) {
++    return;
++  }
++  NSRect rect = [self
++      convertRect:[window convertRectFromScreen:[self wallpaperScreen].frame]
++         fromView:nil];
++  [CATransaction begin];
++  [CATransaction setDisableActions:YES];
++  mWallpaperLayer.frame = NSRectToCGRect(rect);
++  [CATransaction commit];
++}
++@end
++
 +static void ZenWindowVibrancyPrefChanged(const char* aPref, void* aClosure) {
 +  static_cast<nsCocoaWindow*>(aClosure)->UpdateWindowMaterial();
 +}
@@ -90,6 +498,8 @@ index 887e4c052d5dd2b73d4c2059463529fb4b09dcab..36da18e19018b1b216576c299f938e75
 +  mIsBrowserWindow = true;
 +  Preferences::RegisterCallback(ZenWindowVibrancyPrefChanged,
 +                                "zen.widget.macos.window-vibrancy", this);
++  Preferences::RegisterCallback(ZenWindowVibrancyPrefChanged,
++                                "zen.widget.macos.window-fake-blur", this);
 +  UpdateWindowMaterial();
 +}
 +
@@ -99,17 +509,28 @@ index 887e4c052d5dd2b73d4c2059463529fb4b09dcab..36da18e19018b1b216576c299f938e75
 +  if (!mWindow) {
 +    return;
 +  }
-+  bool wanted = StaticPrefs::zen_widget_macos_window_vibrancy();
-+  if (wanted ==
-+      [mWindow.contentView isKindOfClass:[ZenWindowMaterialView class]]) {
++  Class wanted = nil;
++  if (StaticPrefs::zen_widget_macos_window_vibrancy()) {
++    wanted = StaticPrefs::zen_widget_macos_window_fake_blur()
++                 ? [ZenFakeBlurView class]
++                 : [ZenWindowMaterialView class];
++  }
++  NSView* contentView = mWindow.contentView;
++  bool wrapped = [contentView isKindOfClass:[ZenWindowMaterialView class]] ||
++                 [contentView isKindOfClass:[ZenFakeBlurView class]];
++  if (wanted ? [contentView isMemberOfClass:wanted] : !wrapped) {
 +    return;
 +  }
 +
-+  NSRect frame = mWindow.contentView.frame;
-+  NSView* wrapper = wanted ? [[ZenWindowMaterialView alloc] initWithFrame:frame]
-+                           : [[NSView alloc] initWithFrame:frame];
++  NSRect frame = contentView.frame;
++  NSView* wrapper = [[(wanted ? wanted : [NSView class]) alloc]
++      initWithFrame:frame];
 +  wrapper.wantsLayer = YES;
 +  for (NSView* view in [mWindow contentViewContents]) {
++    // ZenFakeBlurView's fallback material stays with it.
++    if ([view isKindOfClass:[ZenWindowMaterialView class]]) {
++      continue;
++    }
 +    [view removeFromSuperviewWithoutNeedingDisplay];
 +    [wrapper addSubview:view];
 +  }
@@ -122,7 +543,7 @@ index 887e4c052d5dd2b73d4c2059463529fb4b09dcab..36da18e19018b1b216576c299f938e75
  void nsCocoaWindow::UpdateWindowDraggingRegion(
      const LayoutDeviceIntRegion& aRegion) {
    // mChildView returns YES from mouseDownCanMoveWindow, so we need to put
-@@ -3858,7 +3964,9 @@ - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+@@ -3877,7 +4397,9 @@ - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
  // NSDraggingDestination
  - (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)sender {
    MOZ_LOG(sCocoaLog, LogLevel::Info, ("ChildView draggingUpdated: entered\n"));
@@ -133,7 +554,7 @@ index 887e4c052d5dd2b73d4c2059463529fb4b09dcab..36da18e19018b1b216576c299f938e75
  }
  
  // NSDraggingDestination
-@@ -3874,6 +3982,9 @@ - (void)draggingExited:(id<NSDraggingInfo>)sender {
+@@ -3893,6 +4415,9 @@ - (void)draggingExited:(id<NSDraggingInfo>)sender {
  - (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
    nsAutoRetainCocoaObject kungFuDeathGrip(self);
    BOOL handled = [self doDragAction:eDrop sender:sender] != NSDragOperationNone;
@@ -143,13 +564,15 @@ index 887e4c052d5dd2b73d4c2059463529fb4b09dcab..36da18e19018b1b216576c299f938e75
    NS_IF_RELEASE(mDragService);
    return handled;
  }
-@@ -4919,6 +5030,10 @@ - (BOOL)wantsBestResolutionOpenGLSurface {
+@@ -4938,6 +5463,12 @@ - (BOOL)wantsBestResolutionOpenGLSurface {
  nsCocoaWindow::~nsCocoaWindow() {
    NS_OBJC_BEGIN_TRY_IGNORE_BLOCK;
  
 +  if (mIsBrowserWindow) {
 +    Preferences::UnregisterCallback(ZenWindowVibrancyPrefChanged,
 +                                    "zen.widget.macos.window-vibrancy", this);
++    Preferences::UnregisterCallback(ZenWindowVibrancyPrefChanged,
++                                    "zen.widget.macos.window-fake-blur", this);
 +  }
    RemoveAllChildren();
    if (mWindow && mWindowMadeHere) {

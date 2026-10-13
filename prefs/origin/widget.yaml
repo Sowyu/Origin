@@ -1,0 +1,14 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# With window-vibrancy on, paint a blurred copy of the desktop wallpaper behind
+# a browser window instead of the live NSVisualEffectView, so the window stays
+# opaque for WindowServer. Off until measured. See ZenFakeBlurView in
+# nsCocoaWindow.mm.
+- name: zen.widget.macos.window-fake-blur
+  value: false
+  condition: "defined(XP_MACOSX)"
+  cpptype: bool
+  mirror: always
+  type: static
