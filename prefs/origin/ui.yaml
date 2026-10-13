@@ -1,0 +1,10 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# How fast the browser UI animates, in percent of Zen's speed: 250 runs every chrome
+# transition and animation 2.5 times as fast (the user asked for it on 2026-10-13), 100 is
+# Zen's speed. Pages are not affected. Reduce Motion in System Settings still turns the
+# animations off. Read in src/zen/common/modules/ZenUIManager.mjs.
+- name: origin.ui.animation-speed-percent
+  value: 250

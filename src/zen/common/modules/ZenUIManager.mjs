@@ -49,6 +49,7 @@ window.gZenUIManager = {
 
     gZenVerticalTabsManager.init();
 
+    this._initAnimationSpeed();
     this._initCreateNewPopup();
     this._debloatContextMenus();
     this._addNewCustomizableButtonsIfNeeded();
@@ -60,6 +61,53 @@ window.gZenUIManager = {
     document
       .getElementById("PersonalToolbar")
       .setAttribute("fullscreentoolbar", "true");
+  },
+
+  /**
+   * How much faster than Zen the UI animates, from origin.ui.animation-speed-percent
+   * (250 runs everything 2.5 times as fast, 100 is Zen's speed).
+   */
+  get animationSpeed() {
+    const percent = Services.prefs.getIntPref(
+      "origin.ui.animation-speed-percent",
+      100
+    );
+    return Math.min(Math.max(percent, 10), 1000) / 100;
+  },
+
+  /**
+   * Speeds up the chrome's CSS transitions and animations by animationSpeed as
+   * they start. Pages run in their own processes, so this never reaches them.
+   */
+  _initAnimationSpeed() {
+    const speedUp = event => {
+      const rate = this.animationSpeed;
+      if (rate === 1) {
+        return;
+      }
+      const { target, pseudoElement } = event;
+      const animations = pseudoElement
+        ? target
+            .getAnimations({ subtree: true })
+            .filter(
+              animation =>
+                animation.effect?.target === target &&
+                animation.effect.pseudoElement === pseudoElement
+            )
+        : target.getAnimations();
+      for (const animation of animations) {
+        if (
+          animation.playbackRate === 1 &&
+          (event.type === "transitionrun"
+            ? animation.transitionProperty === event.propertyName
+            : animation.animationName === event.animationName)
+        ) {
+          animation.playbackRate = rate;
+        }
+      }
+    };
+    window.addEventListener("transitionrun", speedUp, true);
+    window.addEventListener("animationstart", speedUp, true);
   },
 
   /**
@@ -112,6 +160,7 @@ window.gZenUIManager = {
         delay: typeof delay === "function" ? delay(index) : delay,
         ...(gReduceMotion ? { duration: 0, delay: 0 } : {}),
       });
+      animation.playbackRate = this.animationSpeed;
       if (
         animation.effect.getTiming().fill === "forwards" &&
         !options.pseudoElement
@@ -206,6 +255,7 @@ window.gZenUIManager = {
     }
     return await new Promise(resolve => {
       const animation = element.animate(keyframes, ...args);
+      animation.playbackRate = this.animationSpeed;
       animation.onfinish = () => resolve();
     });
   },
