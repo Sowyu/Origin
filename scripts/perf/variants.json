@@ -13,12 +13,12 @@
   "no-page-shadow": {
     "what": "shadow of the floating page",
     "userchrome": "#tabbrowser-tabpanels .browserSidebarContainer { box-shadow: none !important; }\n",
-    "scenarios": ["idle", "scroll", "video-windowed"]
+    "scenarios": ["idle", "switch", "scroll", "video-windowed"]
   },
   "no-page-radius": {
     "what": "rounded corners of the floating page",
     "userchrome": "#tabbrowser-tabpanels .browserSidebarContainer { border-radius: 0 !important; }\n",
-    "scenarios": ["idle", "scroll", "video-windowed"]
+    "scenarios": ["idle", "switch", "scroll", "video-windowed"]
   },
   "no-squircle": {
     "what": "squircle corner shapes across the UI",
