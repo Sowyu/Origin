@@ -5,7 +5,7 @@
 # Origin's tab unloader (src/zen/tabs/OriginTabUnloader.sys.mjs). Once a minute it
 # unloads tabs that sat in the background this many minutes. 0 turns it off.
 - name: origin.tabs.unload-after-minutes
-  value: 10
+  value: 0
 
 # Essentials and pinned tabs stay loaded so mail and chat keep their notifications.
 - name: origin.tabs.unload-essentials
