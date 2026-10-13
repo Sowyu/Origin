@@ -6,7 +6,7 @@ Origin is licensed under the MPL-2.0 (see `LICENSE`). The parts below come from 
 
 - Files: `src/browser/themes/shared/zen-icons/nucleo/*.svg`. The folder keeps its old name because `jar.inc.mn` packs files from that path.
 - Source: Phosphor Icons 2.1.1, npm package `@phosphor-icons/core` (https://registry.npmjs.org/@phosphor-icons/core/-/core-2.1.1.tgz), project https://github.com/phosphor-icons/core.
-- Changes: Bold and Fill weights recolored with `context-fill`. Some icons are mirrored or combined with a slash, plus, minus or no-entry mark.
+- Changes: Regular and Fill weights, the view box cropped to `8 8 240 240` so glyphs and strokes match the icons they replace, recolored with `context-fill`. Some icons are mirrored or combined with a slash, plus, minus or no-entry mark.
 - License: MIT.
 
 ```
