@@ -1,5 +1,5 @@
 diff --git a/widget/cocoa/nsCocoaWindow.mm b/widget/cocoa/nsCocoaWindow.mm
-index e467ce48f523859aaff26023633d4d2d3978818f..f8d4808eb41237be54974345a20312d2865c83e2 100644
+index 887e4c052d5dd2b73d4c2059463529fb4b09dcab..36da18e19018b1b216576c299f938e75093546d3 100644
 --- a/widget/cocoa/nsCocoaWindow.mm
 +++ b/widget/cocoa/nsCocoaWindow.mm
 @@ -86,6 +86,8 @@
@@ -11,7 +11,7 @@ index e467ce48f523859aaff26023633d4d2d3978818f..f8d4808eb41237be54974345a20312d2
  #include "mozilla/WritingModes.h"
  #include "mozilla/dom/Document.h"
  #include "mozilla/layers/CompositorBridgeChild.h"
-@@ -1332,6 +1334,185 @@ - (NSRect)_opaqueRectForWindowMoveWhenInTitlebar {
+@@ -1332,6 +1334,110 @@ - (NSRect)_opaqueRectForWindowMoveWhenInTitlebar {
  }
  @end
  
@@ -115,81 +115,6 @@ index e467ce48f523859aaff26023633d4d2d3978818f..f8d4808eb41237be54974345a20312d2
 +  }
 +  mWindow.contentView = wrapper;
 +  [wrapper release];
-+  mWindowMaterialHole = LayoutDeviceIntRect();
-+
-+  NS_OBJC_END_TRY_IGNORE_BLOCK;
-+}
-+
-+// Cut a hole in the material under the opaque page, so the window server does
-+// not blend the blur under every page frame. The hole stops kHoleInset points
-+// inside the page, which keeps the blur under its rounded corners and covers a
-+// frame of lag while the page moves.
-+void nsCocoaWindow::UpdateOpaqueRegion(const LayoutDeviceIntRegion& aRegion) {
-+  NS_OBJC_BEGIN_TRY_IGNORE_BLOCK;
-+
-+  MOZ_LOG(sCocoaLog, LogLevel::Verbose,
-+          ("nsCocoaWindow::UpdateOpaqueRegion %u rects, bounds %d,%d %dx%d",
-+           aRegion.GetNumRects(), aRegion.GetBounds().x, aRegion.GetBounds().y,
-+           aRegion.GetBounds().width, aRegion.GetBounds().height));
-+
-+  // ponytail: holes only the largest opaque rect, one hole per split view
-+  // pane if the split scenario measures worse than a single page.
-+  LayoutDeviceIntRect hole;
-+  if (StaticPrefs::zen_widget_macos_window_material_hole()) {
-+    for (auto iter = aRegion.RectIter(); !iter.Done(); iter.Next()) {
-+      if (iter.Get().Area() > hole.Area()) {
-+        hole = iter.Get();
-+      }
-+    }
-+  }
-+  if (hole.IsEqualEdges(mWindowMaterialHole)) {
-+    return;
-+  }
-+  mWindowMaterialHole = hole;
-+
-+  if (!mWindow || !mChildView ||
-+      ![mWindow.contentView isKindOfClass:[ZenWindowMaterialView class]]) {
-+    return;
-+  }
-+  auto* view = (ZenWindowMaterialView*)mWindow.contentView;
-+  NSRect bounds = view.bounds;
-+  // ponytail: fixed 16pt margin, make it a pref if strips show at the page
-+  // edge during sidebar or split resizes.
-+  constexpr CGFloat kHoleInset = 16.0;
-+  NSRect rect = NSIntersectionRect(
-+      NSInsetRect([mChildView convertRect:DevPixelsToCocoaPoints(hole)
-+                                   toView:view],
-+                  kHoleInset, kHoleInset),
-+      bounds);
-+  if (hole.IsEmpty() || NSWidth(rect) < 1.0 || NSHeight(rect) < 1.0) {
-+    view.maskImage = nil;
-+    return;
-+  }
-+
-+  // The mask is opaque where the material shows. Its caps keep their size and
-+  // its clear middle point stretches over the hole.
-+  CGFloat left = ceil(NSMinX(rect) - NSMinX(bounds));
-+  CGFloat right = ceil(NSMaxX(bounds) - NSMaxX(rect));
-+  CGFloat top = ceil(view.isFlipped ? NSMinY(rect) - NSMinY(bounds)
-+                                    : NSMaxY(bounds) - NSMaxY(rect));
-+  CGFloat bottom = ceil(view.isFlipped ? NSMaxY(bounds) - NSMaxY(rect)
-+                                       : NSMinY(rect) - NSMinY(bounds));
-+  NSImage* mask =
-+      [NSImage imageWithSize:NSMakeSize(left + 1 + right, top + 1 + bottom)
-+                     flipped:NO
-+              drawingHandler:^BOOL(NSRect aDstRect) {
-+                [NSColor.blackColor set];
-+                NSRectFill(aDstRect);
-+                NSRectFillUsingOperation(NSMakeRect(left, bottom, 1, 1),
-+                                         NSCompositingOperationClear);
-+                return YES;
-+              }];
-+  mask.capInsets = NSEdgeInsetsMake(top, left, bottom, right);
-+  mask.resizingMode = NSImageResizingModeStretch;
-+  view.maskImage = mask;
-+  MOZ_LOG(sCocoaLog, LogLevel::Debug,
-+          ("nsCocoaWindow::UpdateOpaqueRegion hole %d,%d %dx%d", hole.x,
-+           hole.y, hole.width, hole.height));
 +
 +  NS_OBJC_END_TRY_IGNORE_BLOCK;
 +}
@@ -197,7 +122,7 @@ index e467ce48f523859aaff26023633d4d2d3978818f..f8d4808eb41237be54974345a20312d2
  void nsCocoaWindow::UpdateWindowDraggingRegion(
      const LayoutDeviceIntRegion& aRegion) {
    // mChildView returns YES from mouseDownCanMoveWindow, so we need to put
-@@ -3877,7 +4058,9 @@ - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+@@ -3858,7 +3964,9 @@ - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
  // NSDraggingDestination
  - (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)sender {
    MOZ_LOG(sCocoaLog, LogLevel::Info, ("ChildView draggingUpdated: entered\n"));
@@ -208,7 +133,7 @@ index e467ce48f523859aaff26023633d4d2d3978818f..f8d4808eb41237be54974345a20312d2
  }
  
  // NSDraggingDestination
-@@ -3893,6 +4076,9 @@ - (void)draggingExited:(id<NSDraggingInfo>)sender {
+@@ -3874,6 +3982,9 @@ - (void)draggingExited:(id<NSDraggingInfo>)sender {
  - (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
    nsAutoRetainCocoaObject kungFuDeathGrip(self);
    BOOL handled = [self doDragAction:eDrop sender:sender] != NSDragOperationNone;
@@ -218,7 +143,7 @@ index e467ce48f523859aaff26023633d4d2d3978818f..f8d4808eb41237be54974345a20312d2
    NS_IF_RELEASE(mDragService);
    return handled;
  }
-@@ -4938,6 +5124,10 @@ - (BOOL)wantsBestResolutionOpenGLSurface {
+@@ -4919,6 +5030,10 @@ - (BOOL)wantsBestResolutionOpenGLSurface {
  nsCocoaWindow::~nsCocoaWindow() {
    NS_OBJC_BEGIN_TRY_IGNORE_BLOCK;
  

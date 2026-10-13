@@ -85,24 +85,6 @@
     "prefs": {"gfx.webrender.compositor": false},
     "scenarios": ["scroll", "video-windowed"]
   },
-  "material-hole": {
-    "origin_only": true,
-    "what": "fix A: no window material under the opaque page, so only the sidebar, the gaps and the corners sit on the blur (src/widget/cocoa/nsCocoaWindow-mm.patch)",
-    "prefs": {"zen.widget.macos.window-material-hole": true},
-    "scenarios": ["switch", "scroll", "video-windowed", "sidebar", "split"]
-  },
-  "corner-tiles": {
-    "origin_only": true,
-    "what": "fix B: only the page tiles that touch a rounded corner get the rounded mask (src/gfx/layers/NativeLayerCA-mm.patch)",
-    "prefs": {"zen.widget.macos.round-corner-tiles-only": true},
-    "scenarios": ["switch", "scroll", "video-windowed", "split"]
-  },
-  "hole-and-corners": {
-    "origin_only": true,
-    "what": "fix A and fix B together",
-    "prefs": {"zen.widget.macos.window-material-hole": true, "zen.widget.macos.round-corner-tiles-only": true},
-    "scenarios": ["switch", "scroll", "video-windowed", "sidebar", "split"]
-  },
   "small-surface-pool": {
     "what": "native compositor surface pool of 4 instead of 25 spare IOSurfaces: less GPU memory, more IOSurface allocations while scrolling (docs/research/gpu-memory-retina-2026-10-13.md)",
     "prefs": {"gfx.webrender.compositor.surface-pool-size": 4},
