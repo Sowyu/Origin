@@ -103,6 +103,18 @@
     "prefs": {"gfx.webrender.compositor.surface-pool-size": 4},
     "scenarios": ["scroll"]
   },
+  "release-idle-buffers": {
+    "origin_only": true,
+    "what": "native compositor tiles drop their spare buffer after 10 composites without a redraw (src/gfx/webrender_bindings/RenderCompositorNative-cpp.patch); the spares go to the surface pool",
+    "prefs": {"zen.widget.macos.release-idle-tile-buffers": true},
+    "scenarios": ["scroll"]
+  },
+  "idle-buffers-small-pool": {
+    "origin_only": true,
+    "what": "release-idle-buffers with a surface pool of 4, so the spares are really freed",
+    "prefs": {"zen.widget.macos.release-idle-tile-buffers": true, "gfx.webrender.compositor.surface-pool-size": 4},
+    "scenarios": ["scroll"]
+  },
   "on-demand": {
     "what": "only the selected tab loads at startup, as Firefox ships it for normal tabs, and pinned tabs wait too: what unloading background tabs leaves",
     "prefs": {"browser.sessionstore.restore_on_demand": true, "browser.sessionstore.restore_pinned_tabs_on_demand": true},

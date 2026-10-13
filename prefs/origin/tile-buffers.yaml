@@ -1,0 +1,13 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# Return a compositor tile's spare IOSurfaces to the surface pool once the
+# tile has gone 10 composites without a redraw, so a still tile holds only its
+# front buffer. Off until measured (docs/research/gpu-memory-retina-2026-10-13.md,
+# option 3). Read on the render thread in RenderCompositorNative, hence atomic.
+- name: zen.widget.macos.release-idle-tile-buffers
+  value: false
+  cpptype: RelaxedAtomicBool
+  mirror: always
+  type: static

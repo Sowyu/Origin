@@ -1,0 +1,69 @@
+diff --git a/gfx/webrender_bindings/RenderCompositorNative.cpp b/gfx/webrender_bindings/RenderCompositorNative.cpp
+index 2117340531f5493444b9195a0a3e5b4a8278ab15..342db0b3a14c959845fa55cd0d4ca1124961e131 100644
+--- a/gfx/webrender_bindings/RenderCompositorNative.cpp
++++ b/gfx/webrender_bindings/RenderCompositorNative.cpp
+@@ -11,6 +11,7 @@
+ #include "mozilla/ProfilerLabels.h"
+ #include "mozilla/ProfilerMarkers.h"
+ #include "mozilla/StaticPrefs_gfx.h"
++#include "mozilla/StaticPrefs_zen.h"
+ #include "mozilla/gfx/Logging.h"
+ #include "mozilla/gfx/gfxVars.h"
+ #include "mozilla/layers/CompositionRecorder.h"
+@@ -250,6 +251,7 @@ void RenderCompositorNative::CompositorBeginFrame() {
+   mAddedTilePixelCount = 0;
+   mAddedClippedPixelCount = 0;
+   mBeginFrameTimeStamp = TimeStamp::Now();
++  mFrameCount++;
+   mSurfacePoolHandle->OnBeginFrame();
+   mNativeLayerRoot->PrepareForCommit();
+ }
+@@ -287,6 +289,29 @@ void RenderCompositorNative::CompositorEndFrame() {
+ 
+   mNativeLayerRoot->SetLayers(mAddedLayers);
+   mNativeLayerRoot->CommitToScreen();
++
++  if (StaticPrefs::zen_widget_macos_release_idle_tile_buffers()) {
++    // ponytail: fixed idle window, checked only when a frame composites, so a
++    // window that stops compositing keeps the spares of its last 10 frames.
++    // Add a timer if measurements show those matter.
++    const uint64_t kIdleFrames = 10;
++    for (auto& surfaceIter : mSurfaces) {
++      Surface& surface = surfaceIter.second;
++      auto it = surface.mTileDrawnFrames.begin();
++      while (it != surface.mTileDrawnFrames.end()) {
++        if (mFrameCount - it->second < kIdleFrames) {
++          ++it;
++          continue;
++        }
++        auto layerCursor = surface.mNativeLayers.find(it->first);
++        if (layerCursor != surface.mNativeLayers.end()) {
++          layerCursor->second->DiscardBackbuffers();
++        }
++        it = surface.mTileDrawnFrames.erase(it);
++      }
++    }
++  }
++
+   mSurfacePoolHandle->OnEndFrame();
+ }
+ 
+@@ -304,6 +329,10 @@ void RenderCompositorNative::BindNativeLayer(wr::NativeTileId aId,
+ 
+   mCurrentlyBoundNativeLayer = layer;
+ 
++  if (StaticPrefs::zen_widget_macos_release_idle_tile_buffers()) {
++    surface.mTileDrawnFrames.insert_or_assign(layerCursor->first, mFrameCount);
++  }
++
+   mDrawnPixelCount += aDirtyRect.Area();
+ }
+ 
+@@ -420,6 +449,7 @@ void RenderCompositorNative::DestroyTile(wr::NativeSurfaceId aId, int aX,
+   MOZ_RELEASE_ASSERT(layerCursor != surface.mNativeLayers.end());
+   RefPtr<layers::NativeLayer> layer = std::move(layerCursor->second);
+   surface.mNativeLayers.erase(layerCursor);
++  surface.mTileDrawnFrames.erase(TileKey(aX, aY));
+   mTotalTilePixelCount -= gfx::IntRect({}, layer->GetSize()).Area();
+ 
+   // If the layer is currently present in mNativeLayerRoot, it will be destroyed

@@ -1,0 +1,23 @@
+diff --git a/gfx/webrender_bindings/RenderCompositorNative.h b/gfx/webrender_bindings/RenderCompositorNative.h
+index d0f390f9b3d7f04567a1283d3390f9d49a2f9e26..94729d4b3fa28242cef23f398a8ca262a3a538b2 100644
+--- a/gfx/webrender_bindings/RenderCompositorNative.h
++++ b/gfx/webrender_bindings/RenderCompositorNative.h
+@@ -127,6 +127,10 @@ class RenderCompositorNative : public RenderCompositor {
+     bool mIsExternal = false;
+     std::unordered_map<TileKey, RefPtr<layers::NativeLayer>, TileKeyHashFn>
+         mNativeLayers;
++    // Frame in which each tile was last drawn, for tiles that may still hold
++    // back buffers. Only filled while
++    // zen.widget.macos.release-idle-tile-buffers is on.
++    std::unordered_map<TileKey, uint64_t, TileKeyHashFn> mTileDrawnFrames;
+   };
+ 
+   struct SurfaceIdHashFn {
+@@ -142,6 +146,7 @@ class RenderCompositorNative : public RenderCompositor {
+   uint64_t mAddedTilePixelCount = 0;
+   uint64_t mAddedClippedPixelCount = 0;
+   uint64_t mDrawnPixelCount = 0;
++  uint64_t mFrameCount = 0;
+   gfx::IntRect mVisibleBounds;
+   std::unordered_map<wr::NativeSurfaceId, Surface, SurfaceIdHashFn> mSurfaces;
+   TimeStamp mBeginFrameTimeStamp;
