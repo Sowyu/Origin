@@ -64,6 +64,22 @@
     "userchrome": "#zen-browser-background::before, #zen-browser-background::after, #zen-toolbar-background::before, #zen-toolbar-background::after { display: none !important; }\n#tabbrowser-tabpanels .browserSidebarContainer { box-shadow: none !important; border-radius: 0 !important; }\n",
     "scenarios": ["switch", "scroll", "video-windowed", "sidebar", "split"]
   },
+  "vibrancy-and-radius-off": {
+    "what": "window material and rounded page mask both off: tells whether the two costs add up or one hides the other (docs/research/window-material-2026-10-13.md)",
+    "prefs": {"zen.widget.macos.window-vibrancy": false},
+    "userchrome": "#tabbrowser-tabpanels .browserSidebarContainer { border-radius: 0 !important; }\n",
+    "scenarios": ["switch", "scroll", "video-windowed", "split"]
+  },
+  "material-under-window": {
+    "what": "window material 7 (UnderWindowBackground) instead of Zen's 1 (HUDWindow)",
+    "prefs": {"zen.widget.macos.window-material": 7},
+    "scenarios": ["scroll", "video-windowed"]
+  },
+  "no-wr-compositor": {
+    "what": "control for bug 1574586: WebRender draws one window-sized surface instead of native layers, so WindowServer should rise in Zen and Firefox alike",
+    "prefs": {"gfx.webrender.compositor": false},
+    "scenarios": ["scroll", "video-windowed"]
+  },
   "on-demand": {
     "what": "only the selected tab loads at startup, as Firefox ships it for normal tabs, and pinned tabs wait too: what unloading background tabs leaves",
     "prefs": {"browser.sessionstore.restore_on_demand": true, "browser.sessionstore.restore_pinned_tabs_on_demand": true},
