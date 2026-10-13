@@ -2195,6 +2195,16 @@ class nsZenWorkspaces {
       ];
       animations.push(...backgroundAnimations);
     }
+    // Motion's animate() only uses WAAPI for HTML and SVG elements, so on
+    // these XUL elements it ran the slide as a main-thread tick. animateMini()
+    // calls element.animate() with the same spring turned into a linear()
+    // easing, so Gecko can run the transform on the compositor. On finish it
+    // writes the last keyframe inline and cancels itself, like animate() did.
+    const slideOptions = {
+      type: gZenUIManager.motion.spring,
+      bounce: 0,
+      duration: kGlobalAnimationDuration,
+    };
     for (const element of document.querySelectorAll("zen-workspace")) {
       if (element.classList.contains("zen-essentials-container")) {
         continue;
@@ -2236,11 +2246,7 @@ class nsZenWorkspaces {
             keyframes.paddingTop = element.style.paddingTop;
           }
           animations.push(
-            gZenUIManager.motion.animate(element, keyframes, {
-              type: "spring",
-              bounce: 0,
-              duration: kGlobalAnimationDuration,
-            })
+            gZenUIManager.motion.animateMini(element, keyframes, slideOptions)
           );
         }
       }
@@ -2291,16 +2297,12 @@ class nsZenWorkspaces {
         if (shouldAnimate) {
           container.style.transform = existingTransform;
           animations.push(
-            gZenUIManager.motion.animate(
+            gZenUIManager.motion.animateMini(
               container,
               {
                 transform: [existingTransform, newTransform],
               },
-              {
-                type: "spring",
-                bounce: 0,
-                duration: kGlobalAnimationDuration,
-              }
+              slideOptions
             )
           );
         }
