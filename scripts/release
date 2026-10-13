@@ -224,7 +224,8 @@ def sign_mar(unsigned, signed, keychain):
         # Verify like the updater: only the public certificate from the repo.
         run([certutil, "-N", "-d", vdb, "--empty-password"])
         run([certutil, "-A", "-d", vdb, "-n", "origin-mar-a", "-t", ",,", "-i", os.path.join(DER_DIR, "release_primary.der")])
-        run([signmar, "-d", vdb, "-n", "origin-mar-a", "-v", signed])
+        # macOS builds of signmar verify with Security.framework against the DER (-D), as the updater does.
+        run([signmar, "-D", os.path.join(DER_DIR, "release_primary.der"), "-v", signed])
     finally:
         # ponytail: rmtree on the SSD, the key sat in mode-700 files for seconds; use a RAM disk if that is not enough.
         shutil.rmtree(work, ignore_errors=True)

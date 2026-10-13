@@ -209,7 +209,9 @@ def main():
             with open(der_tmp, "wb") as f:
                 f.write(cert)
             run([certutil, "-A", "-d", vdb, "-n", nick, "-t", ",,", "-i", der_tmp])
-            run([signmar, "-d", vdb, "-n", nick, "-v", signed])
+            # macOS builds verify with Security.framework against a DER file (-D), as the updater does;
+            # only signing goes through NSS (engine/modules/libmar/tool/mar.c, the !MAR_NSS branch).
+            run([signmar, "-D", der_tmp, "-v", signed])
             pwfile, p12 = os.path.join(work, "p12pw-" + k), os.path.join(work, k + ".p12")
             p12pw = secrets.token_hex(32)
             with open(pwfile, "w") as f:

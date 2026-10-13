@@ -7,9 +7,10 @@ unset MOZ_STDCXX_COMPAT
 ac_add_options --disable-dmd
 ac_add_options --enable-eme=widevine
 
-# ponytail: no updater and no update URL until Origin has its own signed feed,
-# remove this line when the GitHub Pages update feed and MAR key exist.
-ac_add_options --disable-updater
+# Origin's updater trusts only Origin's MAR keys (configs/updater, copied in by scripts/build-origin).
+# The generic certs flag lets the privileged update helper accept Origin's signing team instead of
+# Mozilla's (docs/research/release-2026-10-13.md).
+ac_add_options --enable-mac-elevated-updates-with-generic-certs
 
 if test "$ZEN_CROSS_COMPILING"; then
   ZEN_MAC_CROSS="$HOME/mac-cross"

@@ -11,6 +11,10 @@ set -eu
 cd "$(dirname "$0")/.."
 echo "reset engine to Firefox $(date +%T)"
 git -C engine checkout -q -- .
+# The updater must trust Origin's MAR keys, not Mozilla's: A as primary and dep1, B as secondary and dep2.
+for pair in release_primary:release_primary release_primary:dep1 release_secondary:release_secondary release_secondary:dep2; do
+  cp "configs/updater/${pair%%:*}.der" "engine/toolkit/mozapps/update/updater/${pair##*:}.der"
+done
 /usr/bin/python3 - <<'PY'
 import glob, os, re, subprocess
 added = set()

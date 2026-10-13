@@ -3,6 +3,7 @@
   "vendor": "Origin",
   "appId": "origin",
   "binaryName": "origin",
+  "updateHostname": "sowyu.github.io/Origin",
   "version": {
     "product": "firefox",
     "version": "157.0.1",
