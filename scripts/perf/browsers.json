@@ -66,5 +66,12 @@
     "ui": "zen",
     "template": "origin-v3",
     "note": "Origin's third build: v2 plus the space-switch and split-view drawing fixes"
+  },
+  "origin-release": {
+    "app": "builds/origin-release/Origin.app",
+    "engine": "gecko",
+    "ui": "zen",
+    "template": "origin-v3",
+    "note": "the pre-release build: v3 plus the review fixes, signed with the Apple Development identity (scripts/sign-app)"
   }
 }
