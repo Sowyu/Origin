@@ -1,0 +1,147 @@
+#!/usr/bin/python3
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Shows what each visual variant looks like next to its base, with the power it saves.
+
+Usage: scripts/perf/looks <report.json> --batch <batch> [--base zen-stock] [--out <prefix>]
+       scripts/perf/looks --self-test
+
+For every scenario and window in the report, each config "<browser>+<variant>" gets its run r1
+screenshot beside the screenshot of the plain browser. zen-stock+X is compared with --base,
+origin+X with origin. The text comes from variants.json ("what"). Power change is whole-Mac
+(sys_combined_mw) and browser plus WindowServer (app_mw + ws_mw), as median change in percent,
+or "within noise" when the min to max ranges overlap (same rule as compare). Rows are sorted by
+whole-Mac saving, biggest first. Writes <prefix>.html (screenshots inlined as JPEG, shrunk with
+sips) and <prefix>.md; the prefix defaults to the report path without .json.
+"""
+import argparse, base64, html, json, os, subprocess, sys, tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+RUNS = os.path.join(HERE, "..", "..", "..", "Zen-Origin-research", "perf.noindex", "runs")
+
+
+def pct(cell, ref):
+    """Signed percent change of cell against ref, or "within noise" when their ranges overlap."""
+    if not cell or not ref:
+        return "n/a"
+    if cell["min"] <= ref["max"] and ref["min"] <= cell["max"]:
+        return "within noise"
+    if not ref["median"]:
+        return "n/a"
+    return f"{(cell['median'] - ref['median']) / ref['median'] * 100:+.0f}%"
+
+
+def add(a, b):
+    if not a or not b:
+        return None
+    return {k: a[k] + b[k] for k in ("median", "min", "max")}
+
+
+def saving(row, base):
+    """mW saved by row against base on whole-Mac power; None when unknown."""
+    a, b = row.get("sys_combined_mw"), base.get("sys_combined_mw")
+    return b["median"] - a["median"] if a and b else None
+
+
+def pairs(rows, base_name):
+    """(base row, variant row, variant name) for every variant row whose plain browser is in the report."""
+    idx = {(r["browser"], r["scenario"], r["window"]): r for r in rows}
+    out = []
+    for r in rows:
+        if "+" not in r["browser"]:
+            continue
+        plain, var = r["browser"].split("+", 1)
+        ref = base_name if plain == base_name else plain if plain == "origin" else None
+        b = idx.get((ref, r["scenario"], r["window"])) if ref else None
+        if b:
+            out.append((b, r, var))
+    out.sort(key=lambda p: -(saving(p[1], p[0]) if saving(p[1], p[0]) is not None else -1e9))
+    return out
+
+
+def shrink(path, tmp):
+    """Base64 JPEG of a screenshot, 640 px on the long side, or None when it is missing."""
+    if not os.path.exists(path):
+        return None
+    dst = os.path.join(tmp, str(abs(hash(path))) + ".jpg")
+    subprocess.run(["sips", "-s", "format", "jpeg", "-Z", "640", path, "--out", dst],
+                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return base64.b64encode(open(dst, "rb").read()).decode()
+
+
+def changes(b, v):
+    return (pct(v.get("sys_combined_mw"), b.get("sys_combined_mw")),
+            pct(add(v.get("app_mw"), v.get("ws_mw")), add(b.get("app_mw"), b.get("ws_mw"))))
+
+
+def render(report, batch, base_name, variants):
+    ps = pairs(report, base_name)
+    md = ["# Variant looks", "",
+          f"Batch {batch}. Medians; \"within noise\" when the min to max ranges overlap. "
+          "Sorted by whole-Mac saving.", "",
+          "| variant | base | scenario | what | whole Mac | browser + WindowServer |", "|---|---|---|---|---|---|"]
+    cards = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for b, v, var in ps:
+            what = variants.get(var, {}).get("what", "")
+            sysc, appc = changes(b, v)
+            scen = f"{v['scenario']}/{v['window']}"
+            md.append(f"| {v['browser']} | {b['browser']} | {scen} | {what} | {sysc} | {appc} |")
+            imgs = []
+            for r in (b, v):
+                p = os.path.join(RUNS, batch, r["browser"], r["scenario"], "r1", r["window"] + ".png")
+                data = shrink(p, tmp)
+                imgs.append(f'<figure><img src="data:image/jpeg;base64,{data}">' if data else
+                            '<figure><div class="miss">no screenshot</div>')
+                imgs[-1] += f"<figcaption>{html.escape(r['browser'])}</figcaption></figure>"
+            cards.append(f'<section><h2>{html.escape(v["browser"])} <small>{html.escape(scen)}</small></h2>'
+                         f'<p>{html.escape(what)}</p>'
+                         f'<p>Whole Mac <b>{sysc}</b> &middot; browser + WindowServer <b>{appc}</b> '
+                         f'(against {html.escape(b["browser"])})</p><div class="row">{"".join(imgs)}</div></section>')
+    page = ("<!doctype html><meta charset=utf-8><title>Variant looks</title><style>"
+            "body{font:14px system-ui;max-width:1360px;margin:2em auto;padding:0 1em}"
+            "section{border-top:1px solid #ccc;padding:1em 0}h2{margin:0}small{font-weight:400;color:#666}"
+            ".row{display:flex;gap:1em}figure{margin:0;flex:1}img{width:100%;border:1px solid #ccc}"
+            ".miss{padding:4em;background:#eee;text-align:center}figcaption{color:#555}</style>"
+            f"<h1>Variant looks</h1><p>Batch {html.escape(batch)}. Sorted by whole-Mac saving, biggest first.</p>"
+            + "".join(cards))
+    return page, "\n".join(md) + "\n"
+
+
+def self_test():
+    c = lambda m, lo, hi: {"median": m, "min": lo, "max": hi}
+    row = lambda n, m: {"browser": n, "scenario": "idle", "window": "idle", "sys_combined_mw": c(m, m - 1, m + 1),
+                        "app_mw": c(m, m - 1, m + 1), "ws_mw": c(1, 1, 1)}
+    rows = [row("zen-stock", 100), row("zen-stock+a", 90), row("zen-stock+b", 70), row("zen-stock+c", 99),
+            row("origin", 50), row("origin+z", 40), row("firefox+q", 1)]
+    got = [(v["browser"]) for _, v, _ in pairs(rows, "zen-stock")]
+    assert got == ["zen-stock+b", "zen-stock+a", "origin+z", "zen-stock+c"], got
+    assert changes(rows[0], rows[3])[0] == "within noise"
+    assert changes(rows[0], rows[2])[0] == "-30%"
+    print("ok")
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("report", nargs="?")
+    p.add_argument("--batch")
+    p.add_argument("--base", default="zen-stock")
+    p.add_argument("--out", help="path prefix for .html and .md (default: report path without .json)")
+    p.add_argument("--self-test", action="store_true")
+    a = p.parse_args()
+    if a.self_test:
+        return self_test()
+    if not a.report or not a.batch:
+        p.error("need a report file and --batch")
+    report = json.load(open(a.report))
+    variants = json.load(open(os.path.join(HERE, "variants.json")))
+    page, md = render(report, a.batch, a.base, variants)
+    out = a.out or os.path.splitext(a.report)[0] + "-looks"
+    open(out + ".html", "w").write(page)
+    open(out + ".md", "w").write(md)
+    print(f"{out}.html, {out}.md")
+
+
+if __name__ == "__main__":
+    main()
