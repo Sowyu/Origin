@@ -70,6 +70,12 @@
     "userchrome": "#tabbrowser-tabpanels .browserSidebarContainer { border-radius: 0 !important; }\n",
     "scenarios": ["switch", "scroll", "video-windowed", "split"]
   },
+  "fake-blur": {
+    "origin_only": true,
+    "what": "the wallpaper, blurred once and painted behind the chrome, instead of the window-wide NSVisualEffectView; the window stays opaque",
+    "prefs": {"zen.widget.macos.window-fake-blur": true},
+    "scenarios": ["switch", "scroll", "video-windowed", "sidebar", "split"]
+  },
   "material-under-window": {
     "what": "window material 7 (UnderWindowBackground) instead of Zen's 1 (HUDWindow)",
     "prefs": {"zen.widget.macos.window-material": 7},
