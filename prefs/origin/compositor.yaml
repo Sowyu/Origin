@@ -5,10 +5,11 @@
 # Give the page's rounded-corner mask only to compositor tiles that reach into
 # a corner, so every other tile stays a plain opaque layer for WindowServer.
 # Off until measured (docs/research/window-material-2026-10-13.md, section 3B).
-# Read in NativeLayerCA::Representation::ApplyChanges; a change applies to a
-# tile the next time its position, clip or size changes.
+# Read on the render thread in NativeLayerCARepresentation::ApplyChanges, hence
+# atomic. A change applies to a tile the next time its position, clip or size
+# changes.
 - name: zen.widget.macos.round-corner-tiles-only
   value: false
-  cpptype: bool
+  cpptype: RelaxedAtomicBool
   mirror: always
   type: static
