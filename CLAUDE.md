@@ -53,4 +53,4 @@ Update `PROGRESS.md` before you stop: tick what you finished, add what you learn
 
 ## Writing style
 
-Plain words, active voice, sentence-case headings, no em dashes. Mark deliberate shortcuts in code with `ponytail: <ceiling>, <upgrade trigger>`. Keep the MPL-2.0 headers on every source file.
+Plain words, active voice, sentence-case headings, no em dashes. Mark deliberate shortcuts in code with `ponytail: <ceiling>, <upgrade trigger>`. Keep the MPL-2.0 headers on every source file. Third-party assets, such as the Phosphor icons, keep their own licence notice instead (see THIRD_PARTY.md).

@@ -2148,184 +2148,187 @@ class nsZenWorkspaces {
     }
     this.#setAnimatingBackground(true);
     let backgroundAnimations = [];
-    if (shouldAnimate && previousWorkspace) {
-      let previousBackgroundOpacity =
-        lazy.browserBackgroundElement.style.getPropertyValue(
-          "--zen-background-opacity"
-        );
-      try {
-        // Prevent NaN from being set
-        if (previousBackgroundOpacity) {
-          previousBackgroundOpacity = parseFloat(previousBackgroundOpacity);
+    try {
+      if (shouldAnimate && previousWorkspace) {
+        let previousBackgroundOpacity =
+          lazy.browserBackgroundElement.style.getPropertyValue(
+            "--zen-background-opacity"
+          );
+        try {
+          // Prevent NaN from being set
+          if (previousBackgroundOpacity) {
+            previousBackgroundOpacity = parseFloat(previousBackgroundOpacity);
+          }
+        } catch {
+          previousBackgroundOpacity = 1;
         }
-      } catch {
-        previousBackgroundOpacity = 1;
+        if (previousBackgroundOpacity == 1 || !previousBackgroundOpacity) {
+          previousBackgroundOpacity = 0;
+        } else {
+          previousBackgroundOpacity = 1 - previousBackgroundOpacity;
+        }
+        let elements = [
+          lazy.browserBackgroundElement,
+          lazy.toolbarBackgroundElement,
+        ];
+        // Fade the gradient layers' real opacity so the compositor runs the
+        // crossfade. The variable already holds the end state the layers show
+        // once the animations are cancelled.
+        elements.forEach(element => {
+          element.style.setProperty("--zen-background-opacity", 1);
+        });
+        const backgroundOptions = {
+          type: gZenUIManager.motion.spring,
+          bounce: 0,
+          duration: kGlobalAnimationDuration,
+        };
+        backgroundAnimations = [
+          gZenUIManager.motion.animateMini(
+            elements,
+            { opacity: [previousBackgroundOpacity, 1] },
+            { ...backgroundOptions, pseudoElement: "::after" }
+          ),
+          gZenUIManager.motion.animateMini(
+            elements,
+            { opacity: [1 - previousBackgroundOpacity, 0] },
+            { ...backgroundOptions, pseudoElement: "::before" }
+          ),
+        ];
+        animations.push(...backgroundAnimations);
       }
-      if (previousBackgroundOpacity == 1 || !previousBackgroundOpacity) {
-        previousBackgroundOpacity = 0;
-      } else {
-        previousBackgroundOpacity = 1 - previousBackgroundOpacity;
-      }
-      let elements = [
-        lazy.browserBackgroundElement,
-        lazy.toolbarBackgroundElement,
-      ];
-      // Fade the gradient layers' real opacity so the compositor runs the
-      // crossfade. The variable already holds the end state the layers show
-      // once the animations are cancelled.
-      elements.forEach(element => {
-        element.style.setProperty("--zen-background-opacity", 1);
-      });
-      const backgroundOptions = {
+      // Motion's animate() only uses WAAPI for HTML and SVG elements, so on
+      // these XUL elements it ran the slide as a main-thread tick. animateMini()
+      // calls element.animate() with the same spring turned into a linear()
+      // easing, so Gecko can run the transform on the compositor. On finish it
+      // writes the last keyframe inline and cancels itself, like animate() did.
+      const slideOptions = {
         type: gZenUIManager.motion.spring,
         bounce: 0,
         duration: kGlobalAnimationDuration,
       };
-      backgroundAnimations = [
-        gZenUIManager.motion.animateMini(
-          elements,
-          { opacity: [previousBackgroundOpacity, 1] },
-          { ...backgroundOptions, pseudoElement: "::after" }
-        ),
-        gZenUIManager.motion.animateMini(
-          elements,
-          { opacity: [1 - previousBackgroundOpacity, 0] },
-          { ...backgroundOptions, pseudoElement: "::before" }
-        ),
-      ];
-      animations.push(...backgroundAnimations);
-    }
-    // Motion's animate() only uses WAAPI for HTML and SVG elements, so on
-    // these XUL elements it ran the slide as a main-thread tick. animateMini()
-    // calls element.animate() with the same spring turned into a linear()
-    // easing, so Gecko can run the transform on the compositor. On finish it
-    // writes the last keyframe inline and cancels itself, like animate() did.
-    const slideOptions = {
-      type: gZenUIManager.motion.spring,
-      bounce: 0,
-      duration: kGlobalAnimationDuration,
-    };
-    for (const element of document.querySelectorAll("zen-workspace")) {
-      if (element.classList.contains("zen-essentials-container")) {
-        continue;
-      }
-      const existingTransform = element.style.transform;
-      const elementWorkspaceId = element.id;
-      const elementWorkspaceIndex = workspaces.findIndex(
-        w => w.uuid === elementWorkspaceId
-      );
-      let offset = elementWorkspaceIndex - newWorkspaceIndex;
-      if (offset > Math.floor(spaceLen / 2)) {
-        offset -= spaceLen;
-      } else if (offset < -Math.floor(spaceLen / 2)) {
-        offset += spaceLen;
-      }
-      offset = offset * 100;
-      const newTransform = `translateX(${offset}%)`;
-      // Only animate the workspace that is coming in, to avoid having multiple workspaces
-      // animating off-screen at the same time which can cause performance issues. With an off
-      // set of 1 or -1, so we animate the current workspace and the next one.
-      const totalDistance = Math.abs(diff);
-      const distanceToElement = isGoingLeft
-        ? (previousWorkspaceIndex - elementWorkspaceIndex + spaceLen) % spaceLen
-        : (elementWorkspaceIndex - previousWorkspaceIndex + spaceLen) %
-          spaceLen;
-      const willBeVisible = distanceToElement <= totalDistance;
-      if (shouldAnimate) {
-        if (!willBeVisible) {
-          element.style.transform = newTransform;
-        } else {
-          const keyframes = {
-            transform: existingTransform
-              ? [existingTransform, newTransform]
-              : newTransform,
-          };
-          if (!existingTransform) {
-            // Motion starts this one from the computed padding, which can
-            // still differ from the inline value while its transition runs.
-            keyframes.paddingTop = element.style.paddingTop;
-          }
-          animations.push(
-            gZenUIManager.motion.animateMini(element, keyframes, slideOptions)
-          );
-        }
-      }
-      element.active = offset === 0;
-      if (offset === 0) {
-        if (tabToSelect != gBrowser.selectedTab && !onInit) {
-          gBrowser.selectedTab = tabToSelect;
-        }
-      }
-    }
-    if (this.shouldAnimateEssentials && previousWorkspace) {
-      for (const data of essentialsAnimData) {
-        const container = data.element;
-        const essentialsWorkspaces = data.workspaces;
-
-        const containsPrev = essentialsWorkspaces.some(
-          w => w.uuid === previousWorkspace.uuid
-        );
-        const containsNew = essentialsWorkspaces.some(
-          w => w.uuid === newWorkspace.uuid
-        );
-
-        if (!containsPrev && !containsNew) {
-          container.setAttribute("hidden", "true");
+      for (const element of document.querySelectorAll("zen-workspace")) {
+        if (element.classList.contains("zen-essentials-container")) {
           continue;
         }
-
-        container.removeAttribute("hidden");
-
-        if (containsPrev && containsNew) {
-          container.style.transform = "translateX(0%)";
-          continue;
+        const existingTransform = element.style.transform;
+        const elementWorkspaceId = element.id;
+        const elementWorkspaceIndex = workspaces.findIndex(
+          w => w.uuid === elementWorkspaceId
+        );
+        let offset = elementWorkspaceIndex - newWorkspaceIndex;
+        if (offset > Math.floor(spaceLen / 2)) {
+          offset -= spaceLen;
+        } else if (offset < -Math.floor(spaceLen / 2)) {
+          offset += spaceLen;
         }
-
-        let existingOffset, newOffset;
-        const currentTransform =
-          parseFloat(container.style.transform.split("(")[1]) || 0;
-        if (containsPrev && !containsNew) {
-          existingOffset = currentTransform;
-          newOffset = isGoingLeft ? 100 : -100;
-        } else {
-          existingOffset = currentTransform || (isGoingLeft ? -100 : 100);
-          newOffset = 0;
-        }
-        data.finalOffset = newOffset;
-        const newTransform = `translateX(${newOffset}%)`;
-        let existingTransform = `translateX(${existingOffset}%)`;
+        offset = offset * 100;
+        const newTransform = `translateX(${offset}%)`;
+        // Only animate the workspace that is coming in, to avoid having multiple workspaces
+        // animating off-screen at the same time which can cause performance issues. With an off
+        // set of 1 or -1, so we animate the current workspace and the next one.
+        const totalDistance = Math.abs(diff);
+        const distanceToElement = isGoingLeft
+          ? (previousWorkspaceIndex - elementWorkspaceIndex + spaceLen) % spaceLen
+          : (elementWorkspaceIndex - previousWorkspaceIndex + spaceLen) %
+            spaceLen;
+        const willBeVisible = distanceToElement <= totalDistance;
         if (shouldAnimate) {
-          container.style.transform = existingTransform;
-          animations.push(
-            gZenUIManager.motion.animateMini(
-              container,
-              {
-                transform: [existingTransform, newTransform],
-              },
-              slideOptions
-            )
-          );
+          if (!willBeVisible) {
+            element.style.transform = newTransform;
+          } else {
+            const keyframes = {
+              transform: existingTransform
+                ? [existingTransform, newTransform]
+                : newTransform,
+            };
+            if (!existingTransform) {
+              // Motion starts this one from the computed padding, which can
+              // still differ from the inline value while its transition runs.
+              keyframes.paddingTop = element.style.paddingTop;
+            }
+            animations.push(
+              gZenUIManager.motion.animateMini(element, keyframes, slideOptions)
+            );
+          }
+        }
+        element.active = offset === 0;
+        if (offset === 0) {
+          if (tabToSelect != gBrowser.selectedTab && !onInit) {
+            gBrowser.selectedTab = tabToSelect;
+          }
         }
       }
+      if (this.shouldAnimateEssentials && previousWorkspace) {
+        for (const data of essentialsAnimData) {
+          const container = data.element;
+          const essentialsWorkspaces = data.workspaces;
+
+          const containsPrev = essentialsWorkspaces.some(
+            w => w.uuid === previousWorkspace.uuid
+          );
+          const containsNew = essentialsWorkspaces.some(
+            w => w.uuid === newWorkspace.uuid
+          );
+
+          if (!containsPrev && !containsNew) {
+            container.setAttribute("hidden", "true");
+            continue;
+          }
+
+          container.removeAttribute("hidden");
+
+          if (containsPrev && containsNew) {
+            container.style.transform = "translateX(0%)";
+            continue;
+          }
+
+          let existingOffset, newOffset;
+          const currentTransform =
+            parseFloat(container.style.transform.split("(")[1]) || 0;
+          if (containsPrev && !containsNew) {
+            existingOffset = currentTransform;
+            newOffset = isGoingLeft ? 100 : -100;
+          } else {
+            existingOffset = currentTransform || (isGoingLeft ? -100 : 100);
+            newOffset = 0;
+          }
+          data.finalOffset = newOffset;
+          const newTransform = `translateX(${newOffset}%)`;
+          let existingTransform = `translateX(${existingOffset}%)`;
+          if (shouldAnimate) {
+            container.style.transform = existingTransform;
+            animations.push(
+              gZenUIManager.motion.animateMini(
+                container,
+                {
+                  transform: [existingTransform, newTransform],
+                },
+                slideOptions
+              )
+            );
+          }
+        }
+      }
+      if (shouldAnimate) {
+        gZenUIManager._preventToolbarRebuild = true;
+        gZenUIManager.updateTabsToolbar();
+      }
+      let promiseTimeout = new Promise(resolve =>
+        setTimeout(resolve, kGlobalAnimationDuration * 1000 + 50)
+      );
+      this.#currentSpaceSwitchContext.animations = animations;
+      // See issue https://github.com/zen-browser/desktop/issues/9334, we need to add
+      // some sort of timeout to the animation promise, just in case it gets stuck.
+      // We are doing a race between the timeout and the animations finishing.
+      await Promise.race([Promise.all(animations), promiseTimeout]).catch(
+        console.error
+      );
+    } finally {
+      // Motion leaves pseudo-element animations filling forwards, so cancel
+      // them to hand the layers back to the variable, even if the switch threw.
+      backgroundAnimations.forEach(animation => animation.cancel());
     }
-    if (shouldAnimate) {
-      gZenUIManager._preventToolbarRebuild = true;
-      gZenUIManager.updateTabsToolbar();
-    }
-    let promiseTimeout = new Promise(resolve =>
-      setTimeout(resolve, kGlobalAnimationDuration * 1000 + 50)
-    );
-    this.#currentSpaceSwitchContext.animations = animations;
-    // See issue https://github.com/zen-browser/desktop/issues/9334, we need to add
-    // some sort of timeout to the animation promise, just in case it gets stuck.
-    // We are doing a race between the timeout and the animations finishing.
-    await Promise.race([Promise.all(animations), promiseTimeout]).catch(
-      console.error
-    );
     this.#currentSpaceSwitchContext.animations = [];
-    // Motion leaves pseudo-element animations filling forwards, so cancel
-    // them to hand the layers back to the variable.
-    backgroundAnimations.forEach(animation => animation.cancel());
     this.#setAnimatingBackground(false);
     if (shouldAnimate) {
       for (const data of essentialsAnimData) {

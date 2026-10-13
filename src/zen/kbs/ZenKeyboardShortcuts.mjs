@@ -1569,6 +1569,10 @@ window.gZenKeyboardShortcutsManager = {
     }
 
     await this._saveShortcuts();
+    for (const browser of nsZenMultiWindowFeature.browsers) {
+      browser.gZenKeyboardShortcutsManager._currentShortcutList =
+        this._currentShortcutList;
+    }
     this.triggerShortcutRebuild();
   },
 
