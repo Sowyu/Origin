@@ -16,7 +16,7 @@ Steps, in order:
 1. Read version and build ID from the app's application.ini, check the code signature and team, and
    check the gates below. A dry run prints every gate that would stop a real run and goes on.
 2. Copy the app with ditto into the work folder, so MAR and DMG come from the same bytes.
-3. Origin-<ver>-arm64.dmg with hdiutil (UDZO, app plus an /Applications link).
+3. Origin-<tag>-arm64.dmg with hdiutil (ULMO, the app, an /Applications link and the first-launch notes).
 4. Complete MAR with engine/tools/update-packaging/make_full_update.sh, stamped channel `release`
    and product version <ver>, then `mar -T` to check the stamp.
 5. Real run only: sign the MAR with key A. The PKCS#12 comes out of the release keychain (written by
@@ -27,7 +27,7 @@ Steps, in order:
 7. feed/updates/browser/Darwin_aarch64-gcc3/release/update.xml, matching surfer's URL
    https://<feed host>/updates/browser/%BUILD_TARGET%/%CHANNEL%/update.xml, written after signing so
    the SHA-512 and size are the signed file's. The MAR URL is
-   https://github.com/Sowyu/Origin/releases/download/<ver>/Origin-<ver>-arm64.mar (bare tag, no v).
+   https://github.com/Sowyu/Origin/releases/download/<tag>/Origin-<tag>-arm64.mar (bare tag, no v).
 8. Real run only: a draft release <ver> on Sowyu/Origin through the REST API with the token from
    `git credential fill` (never printed), assets DMG, MAR, SHA256SUMS and update.xml, each downloaded
    back and hash-checked. A rerun replaces the assets of an existing draft and refuses a published tag.
@@ -168,8 +168,11 @@ def make_dmg(app, out, name, dmg):
     os.mkdir(stage)
     run(["ditto", app, os.path.join(stage, os.path.basename(app))])
     os.symlink("/Applications", os.path.join(stage, "Applications"))
+    howto = os.path.join(RESEARCH, "builds", "dmg-extras", "How to open Origin.txt")
+    if os.path.exists(howto):
+        shutil.copy(howto, stage)
     # ponytail: plain hdiutil DMG without background or signature, add make_dmg's layout if users ask.
-    run(["hdiutil", "create", "-quiet", "-volname", name, "-srcfolder", stage, "-fs", "HFS+", "-format", "UDZO",
+    run(["hdiutil", "create", "-quiet", "-volname", name, "-srcfolder", stage, "-fs", "HFS+", "-format", "ULMO",
          "-ov", os.path.join(out, dmg)])
     shutil.rmtree(stage)
 
@@ -234,13 +237,15 @@ def sign_mar(unsigned, signed, keychain):
     print("signed and verified %s with key A" % os.path.basename(signed))
 
 
-def write_feed(out, info, mar, feed_host):
+def write_feed(out, info, mar, feed_host, tag):
+    # appVersion must be the app's own version: the updater offers an update when the feed's version is
+    # higher, or equal with another build ID (UpdateService.sys.mjs, updateIsAtLeastAsOldAs).
     v = info["version"]
     root = ET.Element("updates")
-    up = ET.SubElement(root, "update", type="minor", displayVersion=v, appVersion=v,
+    up = ET.SubElement(root, "update", type="minor", displayVersion=tag, appVersion=v,
                        platformVersion=info["platform_version"], buildID=info["build_id"])
     ET.SubElement(up, "patch", type="complete",
-                  URL="https://github.com/%s/releases/download/%s/%s" % (REPO, v, os.path.basename(mar)),
+                  URL="https://github.com/%s/releases/download/%s/%s" % (REPO, tag, os.path.basename(mar)),
                   hashFunction="sha512", hashValue=sha(mar, "sha512"), size=str(os.path.getsize(mar)))
     d = os.path.join(out, "feed", "updates", "browser", BUILD_TARGET, CHANNEL)
     os.makedirs(d, exist_ok=True)
@@ -252,7 +257,7 @@ def write_feed(out, info, mar, feed_host):
     return path
 
 
-def publish(out, info, sha_commit, notes, assets):
+def publish(out, info, tag, sha_commit, notes, assets):
     cred = subprocess.run(["git", "credential", "fill"], input="protocol=https\nhost=github.com\n\n",
                           capture_output=True, text=True, check=True).stdout
     token = dict(l.split("=", 1) for l in cred.splitlines() if "=" in l)["password"]
@@ -278,7 +283,6 @@ def publish(out, info, sha_commit, notes, assets):
             body = r.read()
             return body if raw else (json.loads(body) if body else None)
 
-    tag = info["version"]
     # Drafts have no tag yet, so /releases/tags/<tag> does not find them; list instead.
     # ponytail: reads the newest 100 releases only, page through them once Origin has that many
     same = [r for r in call(api + "/releases?per_page=100") if r["tag_name"] == tag]
@@ -290,7 +294,7 @@ def publish(out, info, sha_commit, notes, assets):
     else:
         rel = call(api + "/releases", json.dumps({
             "tag_name": tag, "target_commitish": sha_commit, "name": "Origin " + tag,
-            "body": open(notes, encoding="utf-8").read(), "draft": True, "prerelease": False}).encode())
+            "body": open(notes, encoding="utf-8").read(), "draft": True, "prerelease": True}).encode())
         print("created draft %s" % rel["html_url"])
     for path, ctype in assets:
         name = os.path.basename(path)
@@ -317,6 +321,7 @@ def main():
     p.add_argument("--out", help="work folder (default ../Zen-Origin-research/releases/origin-<ver>-<time>)")
     p.add_argument("--commit", default="HEAD", help="commit the tag points at (default HEAD, must be on GitHub)")
     p.add_argument("--version", help="override the version from application.ini (testing only)")
+    p.add_argument("--tag", help="release tag and the version in file names, such as 1.23.2b-origin.6 (default: the app version)")
     p.add_argument("--notes", help="release notes in markdown, the release body")
     p.add_argument("--feed-host", help="DECISION: host and path prefix that serves updates/, such as sowyu.github.io/updates")
     p.add_argument("--key-b-home", help="DECISION: where the user keeps key B, recorded in the run log only")
@@ -338,16 +343,19 @@ def main():
     if real and run(["git", "-C", ROOT, "status", "--porcelain"]).strip():
         gates.append("the work tree has uncommitted changes; commit them so the tag matches the build")
     v = info["version"]
+    tag = a.tag or v
+    if not re.fullmatch(r"[0-9][0-9A-Za-z.\-]*", tag):
+        sys.exit("odd tag %r" % tag)
     name = info["name"] or "Origin"
-    out = os.path.abspath(a.out or os.path.join(RESEARCH, "releases", "origin-%s-%s" % (v, datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))))
-    dmg, mar = "%s-%s-arm64.dmg" % (name, v), "%s-%s-arm64.mar" % (name, v)
+    out = os.path.abspath(a.out or os.path.join(RESEARCH, "releases", "origin-%s-%s" % (tag, datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))))
+    dmg, mar = "%s-%s-arm64.dmg" % (name, tag), "%s-%s-arm64.mar" % (name, tag)
 
     print("%s for %s %s (build %s, Firefox %s) from commit %s" % ("RELEASE" if real else "DRY RUN", name, v,
           info["build_id"], info["platform_version"], commit[:12]))
     print("  app      %s\n  out      %s" % (app, out))
     print("  dmg      %s\n  mar      %s, channel %s, %s" % (dmg, mar, CHANNEL, "signed with key A" if real else "UNSIGNED in a dry run"))
     print("  feed     https://%s/updates/browser/%s/%s/update.xml" % (a.feed_host or "<feed host undecided>", BUILD_TARGET, CHANNEL))
-    print("  release  %s draft %s on github.com/%s with %s, %s, SHA256SUMS, update.xml" % ("create" if real else "would create", v, REPO, dmg, mar))
+    print("  release  %s draft %s on github.com/%s with %s, %s, SHA256SUMS, update.xml" % ("create" if real else "would create", tag, REPO, dmg, mar))
     if a.key_b_home:
         print("  key B    kept at: %s" % a.key_b_home)
     for g in gates:
@@ -374,12 +382,12 @@ def main():
     with open(os.path.join(out, "SHA256SUMS"), "w") as f:
         for n in (dmg, mar):
             f.write("%s  %s\n" % (sha(os.path.join(out, n), "sha256"), n))
-    feed = write_feed(out, info, os.path.join(out, mar), a.feed_host or "<feed host undecided>")
+    feed = write_feed(out, info, os.path.join(out, mar), a.feed_host or "<feed host undecided>", tag)
     shutil.rmtree(os.path.join(out, "app"))
     if not real:
         print("dry run done: nothing signed, nothing uploaded. Files in %s" % out)
         return
-    publish(out, info, commit, a.notes, [(os.path.join(out, dmg), "application/x-apple-diskimage"),
+    publish(out, info, tag, commit, a.notes, [(os.path.join(out, dmg), "application/x-apple-diskimage"),
                                          (os.path.join(out, mar), "application/octet-stream"),
                                          (os.path.join(out, "SHA256SUMS"), "text/plain"),
                                          (feed, "application/xml")])
