@@ -1,0 +1,245 @@
+# Machine-readable cut list for scripts/sync-upstream. docs/cuts.md says why each cut exists.
+#
+# A line with a slash is a path or glob from the repo root. A trailing slash means the whole
+# folder, and * matches any characters including slashes. A line without a slash is a name
+# (identifier, pref, element id) that must not appear anywhere in the tree after a sync.
+# Write a top-level file as ./name.
+#
+# sync-upstream uses this file to:
+# - delete Zen files that land in a cut path,
+# - resolve conflicts in list files (moz.build, jar.inc.mn, browser.toml and similar) by
+#   dropping lines that name a cut path or name,
+# - fail the sync if a cut name, or the file name of a cut file, is still referenced.
+
+# Zen's GitHub workflows and issue templates (their schedules would run in our repo)
+.github/
+
+# Boosts
+src/zen/boosts/
+src/zen/tests/boosts/
+prefs/zen/boosts.yaml
+locales/*/browser/browser/zen-boosts.ftl
+src/zen/images/boost-indicator.svg
+src/browser/themes/shared/zen-icons/common/library/library-boosts-sprite.svg
+src/accessible/base/TextAttrs-cpp.patch
+src/accessible/windows/ia2/ia2AccessibleComponent-cpp.patch
+src/docshell/base/BrowsingContext-h.patch
+src/dom/base/nsAttrValue-cpp.patch
+src/dom/canvas/CanvasRenderingContext2D-cpp.patch
+src/dom/chrome-webidl/BrowsingContext-webidl.patch
+src/dom/html/HTMLInputElement-cpp.patch
+src/editor/libeditor/HTMLAbsPositionEditor-cpp.patch
+src/gfx/layers/AnimationInfo-cpp.patch
+src/gfx/layers/CompositorAnimationStorage-cpp.patch
+src/gfx/thebes/gfxUtils-cpp.patch
+src/gfx/thebes/gfxUtils-h.patch
+src/image/AutoRestoreSVGState-h.patch
+src/layout/base/PresShell-cpp.patch
+src/layout/base/nsPresContext-h.patch
+src/layout/generic/nsContainerFrame-cpp.patch
+src/layout/generic/nsIFrame-h.patch
+src/layout/generic/nsImageFrame-cpp.patch
+src/layout/generic/nsTextFrame-cpp.patch
+src/layout/generic/nsTextPaintStyle-cpp.patch
+src/layout/mathml/nsMathMLChar-cpp.patch
+src/layout/painting/nsCSSRendering-cpp.patch
+src/layout/painting/nsCSSRenderingBorders-cpp.patch
+src/layout/painting/nsCSSRenderingGradients-cpp.patch
+src/layout/painting/nsCSSRenderingGradients-h.patch
+src/layout/painting/nsImageRenderer-cpp.patch
+src/layout/style/ComputedStyle-cpp.patch
+src/layout/style/ComputedStyle-h.patch
+src/layout/style/GeckoBindings-cpp.patch
+src/layout/style/ServoCSSParser-cpp.patch
+src/layout/style/StyleAnimationValue-cpp.patch
+src/layout/style/StyleColor-cpp.patch
+src/layout/style/StyleColorInlines-h.patch
+src/layout/style/nsStyleStruct-cpp.patch
+src/layout/svg/FilterInstance-cpp.patch
+src/layout/svg/SVGContextPaint-cpp.patch
+src/layout/svg/SVGGradientFrame-cpp.patch
+src/layout/svg/SVGImageContext-cpp.patch
+src/layout/svg/SVGImageContext-h.patch
+src/layout/svg/SVGTextFrame-cpp.patch
+src/layout/svg/SVGUtils-cpp.patch
+src/layout/svg/SVGUtils-h.patch
+src/layout/tables/nsTableFrame-cpp.patch
+src/layout/xul/tree/nsTreeBodyFrame-cpp.patch
+src/servo/ports/geckolib/cbindgen-toml.patch
+src/widget/ScrollbarDrawing-cpp.patch
+src/widget/ScrollbarDrawingCocoa-cpp.patch
+src/widget/ScrollbarDrawingWin11-cpp.patch
+src/widget/Theme-cpp.patch
+src/widget/Theme-h.patch
+src/widget/ThemeColors-cpp.patch
+gZenBoostsManager
+zen.boosts.enabled
+
+# Glance
+src/zen/glance/
+src/zen/tests/glance/
+src/zen/tests/split_view/browser_split_view_with_glance.js
+prefs/zen/glance.yaml
+src/browser/components/search/SearchUIUtils-sys-mjs.patch
+src/browser/modules/BrowserDOMWindow-sys-mjs.patch
+gZenGlanceManager
+cmd_zenGlanceClose
+glanceTab
+cmd_zenGlanceExpand
+cmd_zenGlanceSplit
+zen.glance.enabled
+zen-glance-tab
+glance-id
+GlanceClose
+
+# Zen Mods and the theme store
+src/zen/mods/
+prefs/zen/mods.yaml
+src/browser/components/preferences/zenMarketplace.inc.xhtml
+src/dom/base/Document-cpp.patch
+src/layout/style/nsStyleSheetService-h.patch
+gZenMods
+zen.mods.auto-update
+
+# Live folders
+src/zen/live-folders/
+src/zen/tests/live-folders/
+prefs/zen/live-folders.yaml
+locales/*/browser/browser/zen-live-folders.ftl
+docs/live-folders-specs.md
+gZenLiveFoldersUI
+ZenLiveFoldersManager
+cmd_zenNewLiveFolder
+context_zenLiveFolderOptions
+
+# Space routing
+src/zen/space-routing/
+src/zen/tests/space_routing/
+src/zen/common/sys/ui/ZenSpaceRoutingNavigation.sys.mjs
+locales/*/browser/browser/zen-space-routing.ftl
+gZenSpaceRoutingManager
+cmd_zenOpenSpaceRoutingSettings
+context_zenSpaceRoutingSettings
+
+# Library
+src/zen/library/
+src/zen/tests/library/
+prefs/zen/library.yaml
+locales/*/browser/browser/zen-library.ftl
+src/zen/common/styles/zen-library-media-preview.css
+src/zen/common/styles/zen-library-widget.css
+src/browser/themes/shared/zen-icons/common/library/
+cmd_zenToggleLibrary
+zen.library.enabled
+cmd_zenManageWorkspaces
+context_zenManageWorkspaces
+
+# Share
+src/zen/share/
+src/zen/tests/share/
+prefs/zen/share.yaml
+locales/*/browser/browser/zen-share.ftl
+gZenShareManager
+cmd_zenCtxShareSplitView
+cmd_zenCtxShareWorkspace
+context_zenShareWorkspace
+context_zenShareFolder
+
+# Sidebar media controls
+src/zen/media/
+src/zen/tests/media/
+src/zen/images/note-indicator.svg
+src/browser/actors/WebRTCParent-sys-mjs.patch
+src/dom/chrome-webidl/MediaController-webidl.patch
+src/dom/media/mediacontrol/MediaController-cpp.patch
+src/dom/media/mediacontrol/MediaController-h.patch
+src/dom/media/mediacontrol/MediaStatusManager-cpp.patch
+src/dom/media/mediaelement/HTMLMediaElement-cpp.patch
+gZenMediaController
+
+# Welcome flow and its video
+src/zen/welcome/
+src/zen/tests/welcome/
+prefs/zen/welcome.yaml
+locales/*/browser/browser/zen-welcome.ftl
+src/zen/images/favicons/
+zen-welcome-stage
+zen.welcome-screen.seen
+
+# Download animation
+src/zen/downloads/
+prefs/zen/downloads.yaml
+src/zen/images/downloads/download.svg
+zen.downloads.download-animation
+
+# Update notice and sidebar notification
+prefs/zen/updates.yaml
+src/zen/common/modules/ZenSidebarNotification.mjs
+src/zen/common/styles/zen-sidebar-notification.css
+
+# Startup watermark
+prefs/zen/watermark.yaml
+zen.watermark.enabled
+zen-before-loaded
+
+# Loading progress bar
+src/zen/common/sys/ui/ZenProgressBar.sys.mjs
+
+# Window drag from page content
+src/zen/window-drag/
+src/zen/tests/window_drag/
+
+# Haptic feedback and Zen's native share sheet (src/zen/toolkit)
+src/zen/toolkit/
+prefs/zen/static.yaml
+zen.haptic-feedback.enabled
+
+# Actor and UI component registry used only by cut features
+src/zen/common/Components.manifest
+src/zen/common/sys/ZenActorsManager.sys.mjs
+src/zen/common/sys/ui/ZenUIComponent.sys.mjs
+
+# Workspace bookmarks
+src/zen/spaces/ZenSpaceBookmarksStorage.js
+src/zen/tests/spaces/browser_bookmark_workspace_storage.js
+src/zen/tests/spaces/browser_workspace_bookmarks.js
+src/browser/components/places/PlacesUIUtils-sys-mjs.patch
+src/browser/components/places/content/browserPlacesViews-js.patch
+src/browser/components/places/content/editBookmark-js.patch
+ZenWorkspaceBookmarksStorage
+
+# Tab rename (folder and space rename stay)
+context_zen-edit-tab-title
+zen.tabs.rename-tabs
+
+# App updater and Zen's server links
+src/build/moz-build.patch
+src/docshell/base/nsAboutRedirector-cpp.patch
+
+# Twilight brand
+configs/branding/twilight/
+
+# Nucleo icons with no Phosphor replacement
+src/browser/themes/shared/zen-icons/nucleo/block.svg
+src/browser/themes/shared/zen-icons/nucleo/bolt.svg
+src/browser/themes/shared/zen-icons/nucleo/boost.svg
+src/browser/themes/shared/zen-icons/nucleo/brackets-curly.svg
+src/browser/themes/shared/zen-icons/nucleo/close-filled-round.svg
+src/browser/themes/shared/zen-icons/nucleo/dice.svg
+src/browser/themes/shared/zen-icons/nucleo/eyedropper.svg
+src/browser/themes/shared/zen-icons/nucleo/hammer.svg
+src/browser/themes/shared/zen-icons/nucleo/lightbulb.svg
+src/browser/themes/shared/zen-icons/nucleo/media-mute.svg
+src/browser/themes/shared/zen-icons/nucleo/media-next.svg
+src/browser/themes/shared/zen-icons/nucleo/media-pause.svg
+src/browser/themes/shared/zen-icons/nucleo/media-play.svg
+src/browser/themes/shared/zen-icons/nucleo/media-previous.svg
+src/browser/themes/shared/zen-icons/nucleo/media-unmute.svg
+src/browser/themes/shared/zen-icons/nucleo/microphone-blocked-fill.svg
+src/browser/themes/shared/zen-icons/nucleo/nucleo-copyright-notice.html
+src/browser/themes/shared/zen-icons/nucleo/sliders.svg
+src/browser/themes/shared/zen-icons/nucleo/text-lowercase.svg
+src/browser/themes/shared/zen-icons/nucleo/text-title-case.svg
+src/browser/themes/shared/zen-icons/nucleo/text-uppercase.svg
+src/browser/themes/shared/zen-icons/nucleo/video-blocked-fill.svg
+src/browser/themes/shared/zen-icons/nucleo/video-fill.svg

@@ -8,33 +8,47 @@
 #   scripts/sync-upstream             import the tag onto `upstream`, rebase `main` onto it
 #   scripts/sync-upstream --dry-run   report the tag, its Firefox version and expected conflicts
 #   scripts/sync-upstream --tag 1.23.2b   use this tag instead of the latest stable one
-#   scripts/sync-upstream --continue  after fixing a conflict it stopped on and running git add
+#   .git/sync-upstream --continue     after fixing a conflict it stopped on and running git add
+#   scripts/sync-upstream --self-test check the list-file merge rules
 #
 # Steps:
 # 1. Find the newest stable tag (not twilight, not rc) on zen-browser/desktop.
 # 2. Fetch it with depth 1 and add its tree as a new commit on `upstream`, parented on the
 #    previous one. Zen's history is not imported.
-# 3. Rebase main: git rebase --onto upstream <old upstream> main.
-# 4. Resolve by itself only the conflicts where Origin deleted a file (it stays deleted) and
-#    anything under .github that comes from Zen. Any other conflict stops with a list.
-# 5. Print the next steps. It never builds, measures or releases.
+# 3. Rebase main without rename detection: git rebase -X no-renames --onto upstream <old> main.
+# 4. Resolve by itself:
+#    - a file Origin deleted and Zen changed stays deleted, if it existed in the old upstream,
+#    - a conflict in a cut path (docs/cuts.txt) is deleted,
+#    - a conflicting Zen .patch under src/ is merged at the source level: Zen's old and new
+#      patch and Origin's patch are applied to the pristine Firefox file of each release,
+#      git merge-file merges the results, and the patch is exported again,
+#    - a conflict in a list file (moz.build, jar.inc.mn, browser.toml and similar) keeps Zen's
+#      entries and Origin's changes and drops every entry that names a cut.
+#    Any other conflict stops with a list.
+# 5. Delete Zen files that landed in cut paths, then fail if a cut name or a cut file's name is
+#    still referenced anywhere in src, prefs, locales or configs.
+# 6. Print the next steps. It never builds, measures or releases.
 #
 # Running it again is safe: if `upstream` already holds the tag, it only rebases main if main
-# does not contain upstream yet.
+# does not contain upstream yet. The script copies itself to .git/sync-upstream before the
+# rebase, because the working tree holds an older copy while the rebase is stopped.
 set -eu
 
 # ZEN_REPO overrides the source, for testing against a local repo.
 ZEN=${ZEN_REPO:-https://github.com/zen-browser/desktop}
+FF_RAW=https://raw.githubusercontent.com/mozilla-firefox/firefox
 cd "$(dirname "$0")/.."
 
 dry_run=0
 cont=0
+self_test=0
 tag=
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) dry_run=1 ;;
     --continue) cont=1 ;;
     --tag) tag=${2:?--tag needs a value}; shift ;;
+    --self-test) self_test=1 ;;
     -h|--help) sed -n '5,/^set -eu$/p' "$0" | sed '$d'; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
@@ -42,13 +56,258 @@ while [ $# -gt 0 ]; do
 done
 
 die() { echo "sync-upstream: $*" >&2; exit 1; }
+tmp=$(mktemp -d /tmp/sync-upstream.XXXXXX)
+trap 'rm -rf "$tmp"' EXIT
+
+# Helpers for the cut list, list-file merges and the reference check.
+PY=$(cat <<'EOF'
+import fnmatch, json, os, re, subprocess, sys
+from collections import Counter
+
+def load_cuts(path):
+    pats, names = [], []
+    for line in open(path, encoding="utf-8"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "/" in line:
+            pats.append(line[2:] if line.startswith("./") else line)
+        else:
+            names.append(line)
+    return pats, names
+
+def is_cut(p, pats):
+    for pat in pats:
+        if pat.endswith("/"):
+            if p.startswith(pat) or p == pat[:-1]:
+                return True
+        elif fnmatch.fnmatchcase(p, pat):
+            return True
+    return False
+
+def read_list(path):
+    return [l.rstrip("\n") for l in open(path, encoding="utf-8") if l.strip()]
+
+LIST_FILES = ("moz.build", "jar.mn", "jar.inc.mn", "browser.toml", "manifest.toml",
+              "xpcshell.toml", "ZenPreloadedScripts.js", "zen.globals.mjs", "ignorePrefs.json")
+
+def is_list_file(p):
+    b = os.path.basename(p)
+    return b in LIST_FILES or b.endswith((".manifest", "jar.mn", ".inc.mn"))
+
+TOKEN = re.compile(r"[\w.:/@-]+")
+STRUCT = re.compile(r"^[\s\[\](){},;]*$")
+
+def is_entry(l):
+    # One entry of a list: a quoted name, a jar line, an include. Not a bracket or an
+    # assignment that opens a block.
+    s = l.strip()
+    if s.startswith('["') or s.startswith("#include"):
+        return True
+    return not STRUCT.match(l) and not re.match(r"^\s*[\w.]+\s*(\+?=|\[)", l)
+
+def name_rx(names):
+    if not names:
+        return None
+    alt = "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
+    return re.compile(r"(?<![\w.-])(" + alt + r")(?![\w-])")
+
+class Cuts:
+    def __init__(self, cuts, namesfile):
+        self.pats, self.names = load_cuts(cuts)
+        allnames = read_list(namesfile)
+        self.bases = set(n for n in allnames if n not in self.names)
+        self.rx = name_rx(allnames)
+
+    def entry_hit(self, line, listpath):
+        # The cut that a list entry names, or None.
+        d = os.path.dirname(listpath)
+        for tok in TOKEN.findall(line):
+            tok = tok.strip(".,:")
+            if not tok:
+                continue
+            if os.path.basename(tok) in self.bases:
+                return os.path.basename(tok)
+            if "://" not in tok and not tok.startswith("/"):
+                rel = os.path.normpath(os.path.join(d, tok))
+                if not rel.startswith("..") and is_cut(rel, self.pats):
+                    return rel
+        m = self.rx.search(line) if self.rx else None
+        return m.group(1) if m else None
+
+def cmd_match(cuts):
+    pats, _ = load_cuts(cuts)
+    for p in sys.stdin:
+        p = p.rstrip("\n")
+        if p and is_cut(p, pats):
+            print(p)
+
+def cmd_names(cuts, *trees):
+    # The cut names, plus the file names of cut files that no kept file shares.
+    pats, names = load_cuts(cuts)
+    cut, kept = set(), set()
+    for t in trees:
+        for p in read_list(t):
+            (cut if is_cut(p, pats) else kept).add(os.path.basename(p))
+    for n in names + sorted(cut - kept):
+        print(n)
+
+def cmd_islist(p):
+    sys.exit(0 if is_list_file(p) else 1)
+
+HEADER = re.compile(r"^\s*[\w.]+\s*\+?=\s*[\[(]\s*$")
+CLOSE = ("]", ")", "],", "),")
+
+def merge_block(c, listpath, o, b, t):
+    # Zen's lines (o), minus what Origin's commit removed from the base (b) on its side (t),
+    # plus what it added, minus entries that name a cut. None if a person must decide.
+    removed = Counter(x.strip() for x in b if x.strip()) - Counter(x.strip() for x in t if x.strip())
+    sb, so = set(x.strip() for x in b), set(x.strip() for x in o)
+    added = [i for i, x in enumerate(t) if x.strip() and x.strip() not in sb and x.strip() not in so]
+    if any(not is_entry(t[i]) for i in added):
+        return None
+    # First drop whole blocks Origin removed that Zen still has, if every entry Zen left in
+    # one is an entry Origin removed or one that names a cut.
+    dropped, i = set(), 0
+    while i < len(o):
+        if HEADER.match(o[i]) and removed[o[i].strip()] > 0:
+            j = i + 1
+            while j < len(o) and o[j].strip() not in CLOSE:
+                j += 1
+            if j == len(o):
+                return None
+            inner = o[i + 1:j]
+            if not all(not y.strip() or removed[y.strip()] > 0 or c.entry_hit(y, listpath) for y in inner):
+                return None
+            for y in o[i:j + 1]:
+                if removed[y.strip()] > 0:
+                    removed[y.strip()] -= 1
+                elif y.strip():
+                    sys.stderr.write("    dropped %s (%s)\n" % (y.strip(), c.entry_hit(y, listpath)))
+            dropped.update(range(i, j + 1))
+            i = j
+        i += 1
+    res = []
+    for i, x in enumerate(o):
+        k = x.strip()
+        if i in dropped:
+            continue
+        if k and removed[k] > 0:
+            if not is_entry(x):
+                return None
+            removed[k] -= 1
+        else:
+            res.append(x)
+    # Put each added line after the line that precedes it in Origin's version.
+    for i in added:
+        pos = 0
+        for prev in reversed(t[:i]):
+            idx = [n for n, y in enumerate(res) if y.strip() and y.strip() == prev.strip()]
+            if idx:
+                pos = idx[-1] + 1
+                break
+        res.insert(pos, t[i])
+    keep = []
+    for x in res:
+        hit = c.entry_hit(x, listpath) if is_entry(x) else None
+        if hit:
+            sys.stderr.write("    dropped %s (%s)\n" % (x.strip(), hit))
+        elif not (not x.strip() and keep and not keep[-1].strip()):
+            keep.append(x)
+    return keep
+
+def cmd_listmerge(cuts, namesfile, listpath, ours, base, theirs):
+    # Resolve each conflict block with merge_block. Exit 1 if any block needs a person.
+    c = Cuts(cuts, namesfile)
+    r = subprocess.run(["git", "merge-file", "-p", "--diff3", "-L", "ours", "-L", "base",
+                        "-L", "theirs", ours, base, theirs], stdout=subprocess.PIPE)
+    if r.returncode < 0 or r.returncode > 127:
+        sys.exit(2)
+    out, block, state, unresolved = [], None, None, 0
+    for l in r.stdout.decode("utf-8").splitlines(keepends=True):
+        if block is None and l.startswith("<<<<<<< "):
+            block, state = {"o": [], "b": [], "t": []}, "o"
+        elif block is not None and l.startswith("||||||| "):
+            state = "b"
+        elif block is not None and l.rstrip("\n") == "=======":
+            state = "t"
+        elif block is not None and l.startswith(">>>>>>> "):
+            o, b, t = block["o"], block["b"], block["t"]
+            res = merge_block(c, listpath, o, b, t)
+            if res is None:
+                unresolved += 1
+                out += ["<<<<<<< ours\n"] + o + ["||||||| base\n"] + b + ["=======\n"] + t + [">>>>>>> theirs\n"]
+            else:
+                out += res
+            block = None
+        elif block is not None:
+            block[state].append(l)
+        else:
+            out.append(l)
+    text = "".join(out)
+    sys.stdout.write(text.rstrip("\n") + "\n" if text.endswith("\n") else text)
+    sys.exit(1 if unresolved else 0)
+
+def cmd_check(cuts, namesfile):
+    # Every reference to a cut left in the files named on stdin, one line each.
+    c = Cuts(cuts, namesfile)
+    hits = 0
+    for p in sys.stdin:
+        p = p.rstrip("\n")
+        if not p or is_cut(p, c.pats):
+            continue
+        try:
+            lines = open(p, encoding="utf-8").read().splitlines()
+        except (UnicodeDecodeError, OSError):
+            continue
+        listfile = is_list_file(p)
+        for n, l in enumerate(lines, 1):
+            if listfile and is_entry(l):
+                hit = c.entry_hit(l, p)
+            else:
+                m = c.rx.search(l) if c.rx else None
+                hit = m.group(1) if m else None
+            if hit:
+                hits += 1
+                print("  %s:%d: %s  (%s)" % (p, n, l.strip()[:120], hit))
+    sys.exit(1 if hits else 0)
+
+def cmd_ffver():
+    # The Firefox release Zen builds on: version.candidate when set, else version.version.
+    v = json.load(sys.stdin)["version"]
+    print(v.get("candidate") or v["version"], v.get("candidateBuild", 1))
+
+def cmd_selftest():
+    # The two list conflicts from the 2026-10-13 rehearsal, cut down.
+    c = Cuts.__new__(Cuts)
+    c.pats, c.names, c.bases, c.rx = ["src/zen/library/", "src/zen/tests/spaces/browser_workspace_bookmarks.js"], [], {"ZenProgressBar.sys.mjs"}, None
+    L = lambda s: [x + "\n" for x in s.split("|")]
+    o = L('|X.zen += [|  "a.mjs",|]||X.zen.ui += [|  "sys/ui/ZenProgressBar.sys.mjs",|]')
+    b = L('|X.zen.ui += [|  "sys/ui/ZenProgressBar.sys.mjs",|  "sys/ui/Gone.sys.mjs",|]')
+    assert merge_block(c, "src/zen/common/moz.build", o, b, ["\n"]) == L('|X.zen += [|  "a.mjs",|]|')
+    o = L('|["browser_workspace_bookmarks.js"]||["browser_new.js"]')
+    b = L('|["browser_workspace_bookmarks.js"]')
+    assert merge_block(c, "src/zen/tests/spaces/browser.toml", o, b, L('|["browser_origin.js"]')) == L('["browser_origin.js"]||["browser_new.js"]')
+    assert merge_block(c, "src/zen/moz.build", L('    "library",|    "tabs",'), [], []) == L('    "tabs",')
+    assert merge_block(c, "x/moz.build", L("A += [|  \"a\",|]"), L("A += [|]"), L("B += [|]")) is None
+    print("ok")
+
+cmd, args = sys.argv[1], sys.argv[2:]
+{"match": cmd_match, "names": cmd_names, "islist": cmd_islist, "listmerge": cmd_listmerge,
+ "check": cmd_check, "ffver": cmd_ffver, "selftest": cmd_selftest}[cmd](*args)
+EOF
+)
+py() { /usr/bin/python3 -I -c "$PY" "$@"; }
+if [ "$self_test" = 1 ]; then py selftest; exit; fi
 
 in_rebase() { [ -e "$(git rev-parse --git-path rebase-merge)" ] || [ -e "$(git rev-parse --git-path rebase-apply)" ]; }
+state_file=$(git rev-parse --git-path sync-upstream.state)
 
 # Refuse to start on top of unfinished work.
 if [ "$cont" = 1 ]; then
   in_rebase || die "--continue: no rebase in progress"
   [ "$dry_run" = 0 ] && [ -z "$tag" ] || die "--continue takes no other option"
+  [ -f "$state_file" ] || die "--continue: $state_file is missing, so this rebase was not started by sync-upstream"
 else
   for f in rebase-merge rebase-apply MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD; do
     [ -e "$(git rev-parse --git-path "$f")" ] && die "a rebase, merge or cherry-pick is in progress ($f). Finish or abort it first."
@@ -58,42 +317,59 @@ fi
 git rev-parse -q --verify refs/heads/upstream >/dev/null || die "no local upstream branch"
 git rev-parse -q --verify refs/heads/main >/dev/null || die "no local main branch"
 
-old=$(git rev-parse refs/heads/upstream)
-# The upstream commit subject is "Zen <tag>".
-old_tag=$(git log -1 --format=%s "$old" | sed -n 's/^Zen //p')
-[ -n "$old_tag" ] || die "cannot read the tag from the upstream commit subject: $(git log -1 --format=%s "$old")"
+# The cut list comes from main, which keeps its old commit until the rebase finishes.
+cuts=$tmp/cuts.txt
+git show refs/heads/main:docs/cuts.txt > "$cuts" 2>/dev/null || die "main has no docs/cuts.txt"
 
-# Stable tags look like 1.23.2b. Twilight and rc tags are skipped.
-[ "$cont" = 1 ] && tag=$old_tag
-if [ -z "$tag" ]; then
-  tag=$(git ls-remote --tags --refs "$ZEN" | sed 's|.*refs/tags/||' \
-    | grep -E '^[0-9]+(\.[0-9]+)*b?$' | sort -V | tail -1)
-  [ -n "$tag" ] || die "found no stable tag at $ZEN"
-fi
+ff_version() { git show "$1:surfer.json" | py ffver; }
 
-ff_version() { git show "$1:surfer.json" | /usr/bin/python3 -I -c 'import json,sys; print(json.load(sys.stdin)["version"]["version"])'; }
-old_ff=$(ff_version "$old")
-
-if [ "$tag" = "$old_tag" ]; then
-  echo "upstream already holds Zen $tag (Firefox $old_ff)"
-  new=$old
-  new_ff=$old_ff
+if [ "$cont" = 1 ]; then
+  # old, new, zen_tree, orig_main, tag, old_tag
+  . "$state_file"
+  old_ff=$(ff_version "$old" | cut -d' ' -f1)
+  new_ff=$(ff_version "$new" | cut -d' ' -f1)
 else
-  echo "fetching Zen $tag"
-  git fetch -q --depth 1 --no-tags "$ZEN" "refs/tags/$tag" || die "fetch of tag $tag failed"
-  zen_commit=$(git rev-parse 'FETCH_HEAD^{commit}')
-  new_ff=$(ff_version "$zen_commit")
+  old=$(git rev-parse refs/heads/upstream)
+  # The upstream commit subject is "Zen <tag>".
+  old_tag=$(git log -1 --format=%s "$old" | sed -n 's/^Zen //p')
+  [ -n "$old_tag" ] || die "cannot read the tag from the upstream commit subject: $(git log -1 --format=%s "$old")"
+
+  # Stable tags look like 1.23.2b. Twilight and rc tags are skipped.
+  if [ -z "$tag" ]; then
+    tag=$(git ls-remote --tags --refs "$ZEN" | sed 's|.*refs/tags/||' \
+      | grep -E '^[0-9]+(\.[0-9]+)*b?$' | sort -V | tail -1)
+    [ -n "$tag" ] || die "found no stable tag at $ZEN"
+  fi
+  old_ff=$(ff_version "$old" | cut -d' ' -f1)
+
+  if [ "$tag" = "$old_tag" ]; then
+    echo "upstream already holds Zen $tag (Firefox $old_ff)"
+    new=$old
+    zen_tree=$old
+    new_ff=$old_ff
+  else
+    echo "fetching Zen $tag"
+    git fetch -q --depth 1 --no-tags "$ZEN" "refs/tags/$tag" || die "fetch of tag $tag failed"
+    zen_tree=$(git rev-parse 'FETCH_HEAD^{commit}')
+    new=
+    new_ff=$(ff_version "$zen_tree" | cut -d' ' -f1)
+  fi
+  orig_main=$(git rev-parse refs/heads/main)
+
+  echo "Zen $old_tag -> $tag"
+  echo "Firefox $old_ff -> $new_ff"
+  if [ "$old_ff" != "$new_ff" ]; then
+    echo "The Firefox version changed. Check https://www.mozilla.org/security/advisories/ for fixes in Firefox $new_ff. If it has any, release within 3 days."
+  fi
 fi
 
-echo "Zen $old_tag -> $tag"
-echo "Firefox $old_ff -> $new_ff"
-if [ "$old_ff" != "$new_ff" ]; then
-  echo "The Firefox version changed. Check https://www.mozilla.org/security/advisories/ for fixes in Firefox $new_ff. If it has any, release within 3 days."
-fi
-
-# Is anything under .github in this path one that Zen ships (and so must stay deleted)?
-zen_tree=${zen_commit:-$new}
-is_zen_github() { case "$1" in .github/*) git cat-file -e "$zen_tree:$1" 2>/dev/null || git cat-file -e "$old:$1" 2>/dev/null ;; *) return 1 ;; esac; }
+# Paths that match the cut list and come from Zen, not from Origin.
+zen_cut() {
+  py match "$cuts" | while IFS= read -r p; do
+    if git cat-file -e "$zen_tree:$p" 2>/dev/null || git cat-file -e "$old:$p" 2>/dev/null; then echo "$p"; fi
+  done
+}
+is_zen_cut() { [ -n "$(printf '%s\n' "$1" | zen_cut)" ]; }
 
 if [ "$dry_run" = 1 ]; then
   base=$(git merge-base "$old" main)
@@ -104,16 +380,19 @@ if [ "$dry_run" = 1 ]; then
   # merge-tree replays the whole of main at once. A commit-by-commit rebase can stop on a few
   # more files, but the set is usually the same.
   set +e
-  out=$(git merge-tree --write-tree --name-only --no-messages --merge-base "$base" "$zen_tree" main)
+  out=$(git merge-tree --write-tree --name-only --no-messages -X no-renames --merge-base "$base" "$zen_tree" main)
   rc=$?
   set -e
   [ $rc -le 1 ] || die "git merge-tree failed"
-  auto=; manual=
+  auto=; tried=; manual=
   # Output: the tree id, then one conflicted path per line.
   while IFS= read -r p; do
     [ -n "$p" ] || continue
-    if is_zen_github "$p" || ! git cat-file -e "main:$p" 2>/dev/null; then
+    if is_zen_cut "$p" || { ! git cat-file -e "main:$p" 2>/dev/null && git cat-file -e "$old:$p" 2>/dev/null; }; then
       auto="$auto  $p
+"
+    elif case "$p" in src/*.patch) true ;; *) py islist "$p" ;; esac; then
+      tried="$tried  $p
 "
     else
       manual="$manual  $p
@@ -122,60 +401,141 @@ if [ "$dry_run" = 1 ]; then
   done <<EOF
 $(printf '%s\n' "$out" | sed 1d | sort -u)
 EOF
-  echo "Expected conflicts that resolve automatically (Origin deleted the file):"
+  echo "Expected conflicts that resolve automatically (Origin deleted the file, or a cut path):"
   printf '%s' "${auto:-  none
+}"
+  echo "Expected conflicts the script tries to merge (Firefox patches at the source level, list files):"
+  printf '%s' "${tried:-  none
 }"
   echo "Expected conflicts that need a person:"
   printf '%s' "${manual:-  none
 }"
-  added=$(git diff --name-only --diff-filter=A "$old" "$zen_tree" -- .github)
+  added=$(git diff --no-renames --name-only --diff-filter=A "$old" "$zen_tree" | py match "$cuts")
   if [ -n "$added" ]; then
-    echo "New Zen files under .github that the sync will delete:"
+    echo "New Zen files in cut paths that the sync will delete:"
     printf '  %s\n' $added
   fi
   echo "Dry run: no branch changed."
   exit 0
 fi
 
-if [ "$tag" != "$old_tag" ]; then
+if [ "$cont" = 0 ] && [ -z "$new" ]; then
   msg="Zen $tag
 
-Tree of zen-browser/desktop tag $tag (commit $zen_commit), imported without history. Zen's full history is about 6 GB, so the upstream branch holds one snapshot commit per Zen release."
-  new=$(git commit-tree "$zen_commit^{tree}" -p "$old" -m "$msg")
+Tree of zen-browser/desktop tag $tag (commit $zen_tree), imported without history. Zen's full history is about 6 GB, so the upstream branch holds one snapshot commit per Zen release."
+  new=$(git commit-tree "$zen_tree^{tree}" -p "$old" -m "$msg")
   git update-ref -m "sync-upstream: Zen $tag" refs/heads/upstream "$new" "$old"
   echo "upstream: $(git log -1 --format='%h %s' "$new") (previous: $(git rev-parse --short "$old"))"
 fi
 
-abort_help() {
-  echo
-  echo "To keep going: fix the files above, git add them (or git rm), then run"
-  echo "  scripts/sync-upstream --continue"
+undo_help() {
   echo "To give up and restore main and upstream as they were:"
-  echo "  git rebase --abort"
+  in_rebase && echo "  git rebase --abort"
+  in_rebase || echo "  git checkout -q main && git reset --hard $orig_main"
   if [ "$new" != "$old" ]; then
     echo "  git update-ref refs/heads/upstream $old $new"
-  else
-    echo "and, only if this sync added Zen $old_tag to upstream:"
-    echo "  git update-ref refs/heads/upstream $old^ $old"
   fi
   return 0
+}
+
+# Pristine Firefox file: $1 version, $2 candidate build, $3 path. Prints the local copy.
+ff_file() {
+  local out="$tmp/ff/$1/$3" t
+  t=FIREFOX_$(printf '%s' "$1" | tr . _)
+  if [ ! -f "$out" ]; then
+    mkdir -p "$(dirname "$out")"
+    curl -fsSL -o "$out" "$FF_RAW/${t}_RELEASE/$3" 2>/dev/null \
+      || curl -fsSL -o "$out" "$FF_RAW/${t}_BUILD$2/$3" 2>/dev/null \
+      || { rm -f "$out"; return 1; }
+  fi
+  printf '%s\n' "$out"
+}
+
+# Merge a conflicting Firefox patch at the source level. Stage 1 (base) and 3 (Origin's
+# commit) apply to the old Firefox release, stage 2 (Zen's new patch plus Origin's earlier
+# commits) to the new one.
+merge_patch() {
+  local p=$1 d="$tmp/pm" s t f ov ob nv nb
+  rm -rf "$d"; mkdir -p "$d"
+  for s in 1 2 3; do git show ":$s:$p" > "$d/$s.patch" 2>/dev/null || return 1; done
+  t=$(sed -n 's|^diff --git a/\([^ ]*\) b/.*|\1|p' "$d/1.patch")
+  for s in 1 2 3; do
+    [ "$(grep -c '^diff --git ' "$d/$s.patch")" = 1 ] || return 1
+    [ "$(sed -n 's|^diff --git a/\([^ ]*\) b/.*|\1|p' "$d/$s.patch")" = "$t" ] || return 1
+    grep -q '^new file mode' "$d/$s.patch" && return 1
+  done
+  read -r ov ob <<<"$(ff_version "$old")"
+  read -r nv nb <<<"$(ff_version "$new")"
+  for s in 1 2 3; do
+    if [ "$s" = 2 ]; then f=$(ff_file "$nv" "$nb" "$t") || return 1
+    else f=$(ff_file "$ov" "$ob" "$t") || return 1; fi
+    mkdir -p "$d/$s/$(dirname "$t")"
+    cp "$f" "$d/$s/$t"
+    (cd "$d/$s" && git apply --whitespace=nowarn "$d/$s.patch") || return 1
+  done
+  git merge-file -q -p "$d/2/$t" "$d/1/$t" "$d/3/$t" > "$d/merged" || return 1
+  # Export in Zen's format: git diff --full-index against the pristine new file.
+  mkdir -p "$d/exp/$(dirname "$t")"
+  git -C "$d/exp" init -q
+  cp "$(ff_file "$nv" "$nb" "$t")" "$d/exp/$t"
+  git -C "$d/exp" add -- "$t"
+  cp "$d/merged" "$d/exp/$t"
+  git -C "$d/exp" -c core.quotepath=off -c diff.noprefix=false -c diff.mnemonicPrefix=false \
+    diff --no-color --no-ext-diff --full-index -- "$t" > "$d/out.patch"
+  if [ -s "$d/out.patch" ]; then
+    cp "$d/out.patch" "$p"
+    git add -- "$p"
+  else
+    git rm -q --cached -- "$p"; rm -f -- "$p"
+  fi
+}
+
+names=$tmp/names
+make_names() {
+  git ls-tree -r --name-only "$old" > "$tmp/t1"
+  git ls-tree -r --name-only "$zen_tree" > "$tmp/t2"
+  git ls-tree -r --name-only HEAD > "$tmp/t3"
+  py names "$cuts" "$tmp/t1" "$tmp/t2" "$tmp/t3" > "$names"
+}
+
+stop_help() {
+  echo
+  echo "To keep going: fix the files above, git add them (or git rm), then run"
+  echo "  $(git rev-parse --git-path sync-upstream) --continue"
+  undo_help
 }
 
 # Resolve what we may, then continue, until the rebase finishes or stops on a real conflict.
 resolve_loop() {
   while in_rebase; do
     manual=
+    make_names
     # Porcelain status during a rebase: X is the new base (upstream side), Y is Origin's commit.
     while IFS= read -r line; do
       xy=${line:0:2}; p=${line:3}
       case "$xy" in DD|AU|UD|UA|DU|AA|UU) ;; *) continue ;; esac
-      if [ "$xy" = UD ] || [ "$xy" = DD ]; then
+      if { [ "$xy" = UD ] || [ "$xy" = DD ]; } && git cat-file -e "$old:$p" 2>/dev/null; then
         # Origin's commit deletes a file that Zen changed: it stays deleted.
         git rm -q --cached -- "$p"; rm -f -- "$p"
         echo "  kept deleted: $p"
-      elif is_zen_github "$p"; then
-        git rm -q --cached -- "$p"; rm -f -- "$p"
-        echo "  kept deleted (.github): $p"
+      elif is_zen_cut "$p"; then
+        git rm -q --cached -- "$p" 2>/dev/null || true; rm -f -- "$p"
+        echo "  deleted (cut path): $p"
+      elif [ "$xy" = UU ] && case "$p" in src/*.patch) true ;; *) false ;; esac && merge_patch "$p"; then
+        echo "  merged at the source level: $p"
+      elif [ "$xy" = UU ] && py islist "$p"; then
+        for s in 1 2 3; do git show ":$s:$p" > "$tmp/l$s"; done
+        if py listmerge "$cuts" "$names" "$p" "$tmp/l2" "$tmp/l1" "$tmp/l3" > "$tmp/lout" 2> "$tmp/lerr"; then
+          cp "$tmp/lout" "$p"; git add -- "$p"
+          echo "  merged list file: $p"
+          sed 's/^/  /' "$tmp/lerr"
+        else
+          manual="$manual $xy $p (list file, a block changes structure)
+"
+        fi
+      elif [ "$xy" = UD ] || [ "$xy" = DD ]; then
+        manual="$manual $xy $p (new in Zen, so not kept deleted)
+"
       else
         manual="$manual $xy $p
 "
@@ -188,7 +548,7 @@ EOF
       echo "Rebase stopped at $(git rev-parse --short REBASE_HEAD 2>/dev/null) $(git log -1 --format=%s REBASE_HEAD 2>/dev/null)"
       echo "Conflicts that need a person (status, path):"
       printf '%s' "$manual" | sed 's/^ */  /'
-      abort_help
+      stop_help
       exit 1
     fi
     if git diff --cached --quiet; then
@@ -206,27 +566,43 @@ EOF
 
 if [ "$cont" = 1 ]; then
   resolve_loop
-  echo "main: $(git rev-list --count upstream..main) Origin commits on Zen $tag"
 elif git merge-base --is-ancestor "$new" main; then
   echo "main already contains upstream. Nothing to rebase."
 else
+  cp "$0" "$(git rev-parse --git-path sync-upstream)"
+  chmod +x "$(git rev-parse --git-path sync-upstream)"
+  printf 'old=%s\nnew=%s\nzen_tree=%s\norig_main=%s\ntag=%s\nold_tag=%s\n' \
+    "$old" "$new" "$zen_tree" "$orig_main" "$tag" "$old_tag" > "$state_file"
   base=$(git merge-base "$old" main)
-  echo "rebasing main: git rebase --onto upstream $(git rev-parse --short "$base") main"
-  if ! out=$(git rebase --onto upstream "$base" main 2>&1); then
+  echo "rebasing main: git rebase -X no-renames --onto upstream $(git rev-parse --short "$base") main"
+  if ! out=$(git rebase -X no-renames --onto upstream "$base" main 2>&1); then
     in_rebase || { printf '%s\n' "$out" >&2; die "git rebase failed"; }
   fi
   resolve_loop
-  echo "main: $(git rev-list --count upstream..main) Origin commits on Zen $tag"
 fi
+rm -f "$state_file"
+echo "main: $(git rev-list --count upstream..main) Origin commits on Zen $tag"
 
-# Zen may add new workflows that apply cleanly. Their schedules would run in our public repo.
+# Zen files that merged cleanly into cut paths: new workflows, files in cut folders.
 git checkout -q main
-added=$(git ls-tree -r --name-only main -- .github | while IFS= read -r p; do is_zen_github "$p" && echo "$p"; done || true)
+added=$(git ls-tree -r --name-only main | zen_cut)
 if [ -n "$added" ]; then
   printf '%s\n' "$added" | while IFS= read -r p; do git rm -q -- "$p"; done
-  git commit -q -m "Remove Zen's GitHub files added in $tag" -m "Zen's workflows would run on their schedules in our public repo."
-  echo "removed Zen's .github files:"
+  git commit -q -m "Remove Zen files in cut paths added in $tag" -m "docs/cuts.txt lists the cut paths. Zen's workflows would also run on their schedules in our public repo."
+  echo "removed Zen files in cut paths:"
   printf '  %s\n' $added
+fi
+
+# Cut code that came back through a clean merge or a new Zen file.
+make_names
+if ! git ls-files -- src prefs locales configs surfer.json ':!src/zen/@types' | py check "$cuts" "$names" > "$tmp/refs"; then
+  echo
+  echo "main is rebased, but these lines still reference cut features (file:line, then the cut):"
+  cat "$tmp/refs"
+  echo
+  echo "Remove each reference or move the feature off docs/cuts.txt, commit, then run the build."
+  undo_help
+  exit 1
 fi
 
 echo
