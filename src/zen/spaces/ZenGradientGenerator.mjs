@@ -77,6 +77,8 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
 
   currentOpacity = 0.5;
   dots = [];
+  // Set while the panel UI shows another space, see onWorkspaceChange.
+  _panelUIStale = true;
   useAlgo = "";
   #lastNoiseTexture = null;
   #currentLightness = 50;
@@ -1590,7 +1592,14 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
       );
       const docElement = browser.document.documentElement;
 
-      if (!skipUpdate) {
+      // Nobody sees the panel's dots, wave, texture and buttons while it is
+      // closed, so leave them stale and let handlePanelOpen rebuild them.
+      const updatePanelUI =
+        browser.gZenThemePicker.panel.state !== "closed" ||
+        !!browser.gZenThemePicker.editingWorkspaceId;
+      browser.gZenThemePicker._panelUIStale = !updatePanelUI;
+
+      if (!skipUpdate && updatePanelUI) {
         for (const dot of browser.gZenThemePicker.panel.querySelectorAll(
           ".zen-theme-picker-dot"
         )) {
@@ -1624,18 +1633,16 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
           )
         );
         [backgroundElement, toolbarElement].forEach(element => {
-          element.style.setProperty(
-            "--zen-background-opacity",
-            browser.gZenThemePicker.previousBackgroundOpacity ?? 1
-          );
+          element.style.setProperty("--zen-background-opacity", 1);
         });
         if (browser.gZenThemePicker.previousBackgroundResolve) {
           browser.gZenThemePicker.previousBackgroundResolve();
         }
-        delete browser.gZenThemePicker.previousBackgroundOpacity;
       }
 
-      browser.gZenThemePicker.resetCustomColorList();
+      if (updatePanelUI) {
+        browser.gZenThemePicker.resetCustomColorList();
+      }
 
       browser.gZenThemePicker.currentOpacity = workspaceTheme.opacity ?? 0.5;
       browser.gZenThemePicker.currentTexture = workspaceTheme.texture ?? 0;
@@ -1652,7 +1659,7 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
         "PanelUI-zen-gradient-generator-opacity"
       );
 
-      {
+      if (updatePanelUI) {
         let opacity = browser.gZenThemePicker.currentOpacity;
         const svg = browser.gZenThemePicker.sliderWavePath;
         /* eslint-disable no-unused-vars */
@@ -1694,63 +1701,68 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
             : "url(#PanelUI-zen-gradient-generator-slider-wave-gradient)";
       }
 
-      for (const button of browser.document.querySelectorAll(
-        "#PanelUI-zen-gradient-generator-color-actions button"
-      )) {
-        // disable if there are no buttons
-        button.disabled =
-          workspaceTheme.gradientColors.length === 0 ||
-          (button.id === "PanelUI-zen-gradient-generator-color-add"
-            ? workspaceTheme.gradientColors.length >= nsZenThemePicker.MAX_DOTS
-            : false) ||
-          (button.id === "PanelUI-zen-gradient-generator-color-toggle-algo"
-            ? workspaceTheme.gradientColors.length < 2
-            : false);
-      }
-      const clickToAdd = browser.document.getElementById(
-        "PanelUI-zen-gradient-generator-color-click-to-add"
-      );
-      if (workspaceTheme.gradientColors.length) {
-        clickToAdd.setAttribute("hidden", "true");
-      } else {
-        clickToAdd.removeAttribute("hidden");
-      }
-
-      opacitySlider.value = browser.gZenThemePicker.currentOpacity;
-      const textureSelectWrapper = browser.document.getElementById(
-        "PanelUI-zen-gradient-generator-texture-wrapper"
-      );
-      const textureWrapperWidth =
-        browser.windowUtils.getBoundsWithoutFlushing(
-          textureSelectWrapper
-        ).width;
-      // Dont show when hidden, or before the picker UI exists.
-      if (textureWrapperWidth && browser.gZenThemePicker._textureHandler) {
-        // rotate and trasnform relative to the wrapper width depending on the texture value
-        let textureValue = this.currentTexture;
-        let textureHandler = browser.gZenThemePicker._textureHandler;
-        let rotation = textureValue * 360 - 90;
-        textureHandler.style.transform = `rotate(${rotation + 90}deg)`;
-        // add top and left to center the texture handler in relation with textureWrapperWidth
-        // based on the rotation
-        /* eslint-disable no-shadow */
-        let top =
-          Math.sin((rotation * Math.PI) / 180) * (textureWrapperWidth / 2) - 6;
-        let left =
-          Math.cos((rotation * Math.PI) / 180) * (textureWrapperWidth / 2) - 3;
-        textureHandler.style.top = `${textureWrapperWidth / 2 + top}px`;
-        textureHandler.style.left = `${textureWrapperWidth / 2 + left}px`;
-        // Highlight the 16 buttons based on the texture value
-        let buttons = browser.document.querySelectorAll(
-          ".zen-theme-picker-texture-dot"
+      if (updatePanelUI) {
+        for (const button of browser.document.querySelectorAll(
+          "#PanelUI-zen-gradient-generator-color-actions button"
+        )) {
+          // disable if there are no buttons
+          button.disabled =
+            workspaceTheme.gradientColors.length === 0 ||
+            (button.id === "PanelUI-zen-gradient-generator-color-add"
+              ? workspaceTheme.gradientColors.length >=
+                nsZenThemePicker.MAX_DOTS
+              : false) ||
+            (button.id === "PanelUI-zen-gradient-generator-color-toggle-algo"
+              ? workspaceTheme.gradientColors.length < 2
+              : false);
+        }
+        const clickToAdd = browser.document.getElementById(
+          "PanelUI-zen-gradient-generator-color-click-to-add"
         );
-        let i = 4;
-        for (const button of buttons) {
-          button.classList.toggle("active", i / 16 <= textureValue);
-          i++;
-          // We start at point 4 because that's the first point that is not in the middle of the texture
-          if (i === 16) {
-            i = 0;
+        if (workspaceTheme.gradientColors.length) {
+          clickToAdd.setAttribute("hidden", "true");
+        } else {
+          clickToAdd.removeAttribute("hidden");
+        }
+
+        opacitySlider.value = browser.gZenThemePicker.currentOpacity;
+        const textureSelectWrapper = browser.document.getElementById(
+          "PanelUI-zen-gradient-generator-texture-wrapper"
+        );
+        const textureWrapperWidth =
+          browser.windowUtils.getBoundsWithoutFlushing(
+            textureSelectWrapper
+          ).width;
+        // Dont show when hidden, or before the picker UI exists.
+        if (textureWrapperWidth && browser.gZenThemePicker._textureHandler) {
+          // rotate and trasnform relative to the wrapper width depending on the texture value
+          let textureValue = this.currentTexture;
+          let textureHandler = browser.gZenThemePicker._textureHandler;
+          let rotation = textureValue * 360 - 90;
+          textureHandler.style.transform = `rotate(${rotation + 90}deg)`;
+          // add top and left to center the texture handler in relation with textureWrapperWidth
+          // based on the rotation
+          /* eslint-disable no-shadow */
+          let top =
+            Math.sin((rotation * Math.PI) / 180) * (textureWrapperWidth / 2) -
+            6;
+          let left =
+            Math.cos((rotation * Math.PI) / 180) * (textureWrapperWidth / 2) -
+            3;
+          textureHandler.style.top = `${textureWrapperWidth / 2 + top}px`;
+          textureHandler.style.left = `${textureWrapperWidth / 2 + left}px`;
+          // Highlight the 16 buttons based on the texture value
+          let buttons = browser.document.querySelectorAll(
+            ".zen-theme-picker-texture-dot"
+          );
+          let i = 4;
+          for (const button of buttons) {
+            button.classList.toggle("active", i / 16 <= textureValue);
+            i++;
+            // We start at point 4 because that's the first point that is not in the middle of the texture
+            if (i === 16) {
+              i = 0;
+            }
           }
         }
       }
@@ -1766,10 +1778,12 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
         browser.gZenThemePicker.updateNoise(workspaceTheme.texture);
       }
 
-      browser.gZenThemePicker.customColorList.innerHTML = "";
-      for (const dot of workspaceTheme.gradientColors) {
-        if (dot.isCustom) {
-          browser.gZenThemePicker.addColorToCustomList(dot.c);
+      if (updatePanelUI) {
+        browser.gZenThemePicker.customColorList.innerHTML = "";
+        for (const dot of workspaceTheme.gradientColors) {
+          if (dot.isCustom) {
+            browser.gZenThemePicker.addColorToCustomList(dot.c);
+          }
         }
       }
 
@@ -1835,7 +1849,7 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
         }
       }
 
-      if (!skipUpdate) {
+      if (!skipUpdate && updatePanelUI) {
         browser.gZenThemePicker.dots = [];
         browser.gZenThemePicker.recalculateDots(workspaceTheme.gradientColors);
       }
@@ -1983,6 +1997,11 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
   }
 
   updateCurrentWorkspace(skipSave = true) {
+    if (this._panelUIStale) {
+      // The dots show another space, so reapply the saved theme instead.
+      this.onWorkspaceChange(this.workspaceBeingEdited, true);
+      return;
+    }
     this.updated = skipSave;
     const dots = this.panel.querySelectorAll(".zen-theme-picker-dot");
     const colors = Array.from(dots)
@@ -2051,6 +2070,9 @@ export class nsZenThemePicker extends nsZenMultiWindowFeature {
   }
 
   handlePanelOpen() {
+    if (this._panelUIStale) {
+      this.onWorkspaceChange(this.workspaceBeingEdited);
+    }
     this.initThemePicker();
     setTimeout(() => {
       this.updateCurrentWorkspace();

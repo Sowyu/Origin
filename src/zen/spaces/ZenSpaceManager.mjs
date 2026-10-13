@@ -2147,6 +2147,7 @@ class nsZenWorkspaces {
       }
     }
     this.#setAnimatingBackground(true);
+    let backgroundAnimations = [];
     if (shouldAnimate && previousWorkspace) {
       let previousBackgroundOpacity =
         lazy.browserBackgroundElement.style.getPropertyValue(
@@ -2165,30 +2166,34 @@ class nsZenWorkspaces {
       } else {
         previousBackgroundOpacity = 1 - previousBackgroundOpacity;
       }
-      gZenThemePicker.previousBackgroundOpacity = previousBackgroundOpacity;
       let elements = [
         lazy.browserBackgroundElement,
         lazy.toolbarBackgroundElement,
       ];
+      // Fade the gradient layers' real opacity so the compositor runs the
+      // crossfade. The variable already holds the end state the layers show
+      // once the animations are cancelled.
       elements.forEach(element => {
-        element.style.setProperty(
-          "--zen-background-opacity",
-          previousBackgroundOpacity
-        );
+        element.style.setProperty("--zen-background-opacity", 1);
       });
-      animations.push(
-        gZenUIManager.motion.animate(
+      const backgroundOptions = {
+        type: gZenUIManager.motion.spring,
+        bounce: 0,
+        duration: kGlobalAnimationDuration,
+      };
+      backgroundAnimations = [
+        gZenUIManager.motion.animateMini(
           elements,
-          {
-            "--zen-background-opacity": [previousBackgroundOpacity, 1],
-          },
-          {
-            type: "spring",
-            bounce: 0,
-            duration: kGlobalAnimationDuration,
-          }
-        )
-      );
+          { opacity: [previousBackgroundOpacity, 1] },
+          { ...backgroundOptions, pseudoElement: "::after" }
+        ),
+        gZenUIManager.motion.animateMini(
+          elements,
+          { opacity: [1 - previousBackgroundOpacity, 0] },
+          { ...backgroundOptions, pseudoElement: "::before" }
+        ),
+      ];
+      animations.push(...backgroundAnimations);
     }
     for (const element of document.querySelectorAll("zen-workspace")) {
       if (element.classList.contains("zen-essentials-container")) {
@@ -2220,24 +2225,22 @@ class nsZenWorkspaces {
         if (!willBeVisible) {
           element.style.transform = newTransform;
         } else {
-          const existingPaddingTop = element.style.paddingTop;
+          const keyframes = {
+            transform: existingTransform
+              ? [existingTransform, newTransform]
+              : newTransform,
+          };
+          if (!existingTransform) {
+            // Motion starts this one from the computed padding, which can
+            // still differ from the inline value while its transition runs.
+            keyframes.paddingTop = element.style.paddingTop;
+          }
           animations.push(
-            gZenUIManager.motion.animate(
-              element,
-              {
-                transform: existingTransform
-                  ? [existingTransform, newTransform]
-                  : newTransform,
-                paddingTop: existingTransform
-                  ? [existingPaddingTop, existingPaddingTop]
-                  : existingPaddingTop,
-              },
-              {
-                type: "spring",
-                bounce: 0,
-                duration: kGlobalAnimationDuration,
-              }
-            )
+            gZenUIManager.motion.animate(element, keyframes, {
+              type: "spring",
+              bounce: 0,
+              duration: kGlobalAnimationDuration,
+            })
           );
         }
       }
@@ -2318,6 +2321,9 @@ class nsZenWorkspaces {
       console.error
     );
     this.#currentSpaceSwitchContext.animations = [];
+    // Motion leaves pseudo-element animations filling forwards, so cancel
+    // them to hand the layers back to the variable.
+    backgroundAnimations.forEach(animation => animation.cancel());
     this.#setAnimatingBackground(false);
     if (shouldAnimate) {
       for (const data of essentialsAnimData) {
