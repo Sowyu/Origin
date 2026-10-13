@@ -1,16 +1,17 @@
 diff --git a/widget/cocoa/nsCocoaWindow.mm b/widget/cocoa/nsCocoaWindow.mm
-index e467ce48f523859aaff26023633d4d2d3978818f..f159be8c8c88ad745f081a0a4ee0b4db64f4da52 100644
+index e467ce48f523859aaff26023633d4d2d3978818f..466e90dc641625bb6d5549090a5cf37addb6db3f 100644
 --- a/widget/cocoa/nsCocoaWindow.mm
 +++ b/widget/cocoa/nsCocoaWindow.mm
-@@ -73,6 +73,7 @@
+@@ -73,6 +73,8 @@
  #include "qcms.h"
  
  #include <algorithm>
 +#import <QuartzCore/QuartzCore.h>
++#import <CoreImage/CoreImage.h>
  #include "mozilla/AutoRestore.h"
  #include "mozilla/BasicEvents.h"
  #include "mozilla/Maybe.h"
-@@ -86,6 +87,8 @@
+@@ -86,6 +88,8 @@
  #include "mozilla/StaticPrefs_gfx.h"
  #include "mozilla/StaticPrefs_ui.h"
  #include "mozilla/StaticPrefs_widget.h"
@@ -19,7 +20,7 @@ index e467ce48f523859aaff26023633d4d2d3978818f..f159be8c8c88ad745f081a0a4ee0b4db
  #include "mozilla/WritingModes.h"
  #include "mozilla/dom/Document.h"
  #include "mozilla/layers/CompositorBridgeChild.h"
-@@ -1332,6 +1335,523 @@ - (NSRect)_opaqueRectForWindowMoveWhenInTitlebar {
+@@ -1332,6 +1336,523 @@ - (NSRect)_opaqueRectForWindowMoveWhenInTitlebar {
  }
  @end
  
@@ -543,7 +544,7 @@ index e467ce48f523859aaff26023633d4d2d3978818f..f159be8c8c88ad745f081a0a4ee0b4db
  void nsCocoaWindow::UpdateWindowDraggingRegion(
      const LayoutDeviceIntRegion& aRegion) {
    // mChildView returns YES from mouseDownCanMoveWindow, so we need to put
-@@ -3877,7 +4397,9 @@ - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+@@ -3877,7 +4398,9 @@ - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
  // NSDraggingDestination
  - (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)sender {
    MOZ_LOG(sCocoaLog, LogLevel::Info, ("ChildView draggingUpdated: entered\n"));
@@ -554,7 +555,7 @@ index e467ce48f523859aaff26023633d4d2d3978818f..f159be8c8c88ad745f081a0a4ee0b4db
  }
  
  // NSDraggingDestination
-@@ -3893,6 +4415,9 @@ - (void)draggingExited:(id<NSDraggingInfo>)sender {
+@@ -3893,6 +4416,9 @@ - (void)draggingExited:(id<NSDraggingInfo>)sender {
  - (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
    nsAutoRetainCocoaObject kungFuDeathGrip(self);
    BOOL handled = [self doDragAction:eDrop sender:sender] != NSDragOperationNone;
@@ -564,7 +565,7 @@ index e467ce48f523859aaff26023633d4d2d3978818f..f159be8c8c88ad745f081a0a4ee0b4db
    NS_IF_RELEASE(mDragService);
    return handled;
  }
-@@ -4938,6 +5463,12 @@ - (BOOL)wantsBestResolutionOpenGLSurface {
+@@ -4938,6 +5464,12 @@ - (BOOL)wantsBestResolutionOpenGLSurface {
  nsCocoaWindow::~nsCocoaWindow() {
    NS_OBJC_BEGIN_TRY_IGNORE_BLOCK;
  
