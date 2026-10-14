@@ -129,5 +129,12 @@
     "ui": "zen",
     "template": "origin-v3",
     "note": "test build for pre-release 7: pre-release 6 plus the fake wallpaper blur (zen.widget.macos.window-fake-blur, off by default in this build); thin LTO and PGO, signed"
+  },
+  "origin-release-7": {
+    "app": "builds/origin-release-7/Origin.app",
+    "engine": "gecko",
+    "ui": "zen",
+    "template": "origin-v3",
+    "note": "pre-release 7: the fake wallpaper blur on, updates only to later builds; thin LTO and PGO, signed"
   }
 }

@@ -4,10 +4,11 @@
 
 # With window-vibrancy on, paint a blurred copy of the desktop wallpaper behind
 # a browser window instead of the live NSVisualEffectView, so the window stays
-# opaque for WindowServer. Off until measured. See ZenFakeBlurView in
-# nsCocoaWindow.mm.
+# opaque for WindowServer. On since pre-release 7 at the user's word (2026-10-14); its power is not
+# measured yet, the blur-off window it copies measured 32 against 66 mW scrolling. See ZenFakeBlurView
+# in nsCocoaWindow.mm.
 - name: zen.widget.macos.window-fake-blur
-  value: false
+  value: true
   condition: "defined(XP_MACOSX)"
   cpptype: bool
   mirror: always
