@@ -76,6 +76,12 @@
     "prefs": {"zen.widget.macos.window-fake-blur": true},
     "scenarios": ["switch", "scroll", "video-windowed", "sidebar", "split"]
   },
+  "real-blur": {
+    "origin_only": true,
+    "what": "the live NSVisualEffectView instead of the fake wallpaper blur, on builds that turn the fake blur on",
+    "prefs": {"zen.widget.macos.window-fake-blur": false},
+    "scenarios": ["switch", "scroll", "video-windowed", "sidebar", "split"]
+  },
   "material-under-window": {
     "what": "window material 7 (UnderWindowBackground) instead of Zen's 1 (HUDWindow)",
     "prefs": {"zen.widget.macos.window-material": 7},

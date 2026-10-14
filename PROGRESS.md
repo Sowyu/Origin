@@ -49,6 +49,7 @@ Next action (pre-release 1.23.2b-origin.7 is out since 2026-10-14 03:55 CEST: ht
 
 ## Decisions made
 
+- 2026-10-14 04:15 CEST: The user said to stop the measurements. Batch fakeblur-2 (pre-release 7 against its real blur and no blur) was stopped before its first run finished; run it again only when the user asks.
 - 2026-10-14 01:10 CEST: The user wants the see-through look and accepted a fake: the wallpaper blurred once and painted behind the chrome in an opaque window, showing only the wallpaper and not other windows ("wallpaper only is fine"). It goes behind `zen.widget.macos.window-fake-blur`, measured against the real blur before it ships.
 - 2026-10-14 23:10 CEST: The user asked for automatic updates. They chose GitHub Pages on the Origin repo for the feed (https://sowyu.github.io/Origin/, branch gh-pages) and to keep both MAR keys on this Mac for now (keychain `origin-release`, password in the login keychain). Key B can move off this Mac later, only with their OK.
 - 2026-10-14 21:30 CEST: The user keeps the blur, after the overnight batches showed vibrancy roughly doubles WindowServer power while scrolling and triples it on video, with no way found to keep it and save that. Fixes A and B are removed (src/widget/cocoa patches back to Zen's, the opaque region and corner tile patches deleted), and the idle tile buffers stay.
