@@ -122,5 +122,12 @@
     "ui": "zen",
     "template": "origin-v3",
     "note": "the build just before pre-release 6 (build 20261014003115), kept to test that it updates itself to pre-release 6"
+  },
+  "origin-7": {
+    "app": "builds/origin-7-test/Origin.app",
+    "engine": "gecko",
+    "ui": "zen",
+    "template": "origin-v3",
+    "note": "test build for pre-release 7: pre-release 6 plus the fake wallpaper blur (zen.widget.macos.window-fake-blur, off by default in this build); thin LTO and PGO, signed"
   }
 }
