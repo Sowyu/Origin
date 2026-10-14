@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <updates>
-  <update type="minor" displayVersion="1.23.2b-origin.6" appVersion="1.23.2b" platformVersion="157.0.1" buildID="20261014003225">
-    <patch type="complete" URL="https://github.com/Sowyu/Origin/releases/download/1.23.2b-origin.6/Origin-1.23.2b-origin.6-arm64.mar" hashFunction="sha512" hashValue="17f8396e8c54be87d28871de0580908fc3f45e0514660b105bb7a0943bdef42e258ac7829f155feb9e2c249524a136142d4fc7fb325e86e47196c54ab9a625ae" size="77597550" />
+  <update type="minor" displayVersion="1.23.2b-origin.7" appVersion="1.23.2b" platformVersion="157.0.1" buildID="20261014023324">
+    <patch type="complete" URL="https://github.com/Sowyu/Origin/releases/download/1.23.2b-origin.7/Origin-1.23.2b-origin.7-arm64.mar" hashFunction="sha512" hashValue="110e8bb118e486772ce2698b52d3394590358f5b30316aa4aaf02e9963b40f8e4e3b1068ae2ff5a80dc83fa8a901c8dd4bd91f44674ef785176bf017c45003d1" size="77607046" />
   </update>
 </updates>
