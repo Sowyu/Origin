@@ -1,0 +1,21 @@
+diff --git a/toolkit/mozapps/update/UpdateService.sys.mjs b/toolkit/mozapps/update/UpdateService.sys.mjs
+index 1166c7b232e502cd2c5bf713c122962c2242216b..76bd730491aec5d7b0c1e7a87c96eb9663a7bb1e 100644
+--- a/toolkit/mozapps/update/UpdateService.sys.mjs
++++ b/toolkit/mozapps/update/UpdateService.sys.mjs
+@@ -1957,9 +1957,15 @@ function updateIsAtLeastAsOldAs(update, version, buildID) {
+     return false;
+   }
+   let versionComparison = Services.vc.compare(update.appVersion, version);
++  // Origin ships several builds under one version, so with equal versions only
++  // a later build ID is an update; the feed must never move a newer build back.
++  const olderBuild =
++    /^\d{14}$/.test(update.buildID) &&
++    /^\d{14}$/.test(buildID) &&
++    update.buildID < buildID;
+   return (
+     versionComparison < 0 ||
+-    (versionComparison == 0 && update.buildID == buildID)
++    (versionComparison == 0 && (update.buildID == buildID || olderBuild))
+   );
+ }
+ 
